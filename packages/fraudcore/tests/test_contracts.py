@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from fraudcore.contracts import DecisionEvent, EnrichedPayment, Payment, entity_edges
+from fraudcore.contracts import DecisionEvent, EnrichedPayment
 
 BASE = dict(payment_id="p1", user_id="u_000123", card_id="c1", amount=42.5, currency="USD",
             merchant_id="m1", mcc="5411", country="CO", device_id="d1", ip_country="CO", channel="web",
@@ -24,11 +24,3 @@ def test_decision_labels_are_closed_set():
     with pytest.raises(ValidationError):
         DecisionEvent(payment_id="p1", user_id="u", decision="MAYBE", score=0.5, model="xgb",
                       model_version="1", threshold_set="v1", t_scheduled_ns=1, t_decided_ns=2)
-
-
-def test_entity_edges_for_p4_graph():
-    decision = DecisionEvent(payment_id="p1", user_id="u_000123", decision="BLOCK", score=0.97, model="xgb",
-                             model_version="1", threshold_set="v1", t_scheduled_ns=1, t_decided_ns=2)
-    edges = entity_edges(Payment(**BASE), decision)
-    assert {e.rel for e in edges} == {"USES_CARD", "USES_DEVICE", "CONNECTS_FROM", "PAYS"}
-    assert all(e.src_id == "u_000123" and e.decision == "BLOCK" for e in edges)

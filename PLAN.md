@@ -2,7 +2,7 @@
 
 > **Plan de proyecto** (vive en este repo como `PLAN.md`). **Estado:** ✅ Plan completo (12/12 módulos), listo para implementar en la fase F3 del plan de Learning.
 > Stack: Kafka (KRaft) · Flink SQL · Redis · XGBoost → ONNX Runtime · PyTorch (challenger en shadow) · MLflow · PostgreSQL · FastAPI · Prometheus + Grafana · OpenTelemetry · LLM Gateway (`llm-gateway`, Python) · Docker Compose
-> **v2 (§13):** Evidently (drift, equivalente a SageMaker Model Monitor) · SageMaker Processing (modo local) + MinIO/S3 versionado · Pandas · `judgekit` (auditoría de explicaciones) · topic `entity-edges` para el GraphRAG de P4
+> **v2 (§13):** Evidently (drift) · backtesting como job batch en contenedor (KFP local) sobre MinIO/S3 versionado · Pandas · `judgekit` (auditoría de explicaciones)
 > Gasto: **$0** (todo local).
 
 ## Módulos del plan
@@ -20,7 +20,7 @@
 | 10 | Estructura del repo y del README | ✅ |
 | 11 | Hitos de implementación y criterios de aceptación | ✅ |
 | 12 | Riesgos y pendientes | ✅ |
-| 13 | **v2 — Absorción de los proyectos del CV** (Evidently, SageMaker Processing local + MinIO, auditoría de explicaciones, grafo para P4) | ✅ v2 |
+| 13 | **v2 — Absorción de los proyectos del CV** (Evidently, backtesting en contenedor sobre MinIO, auditoría de explicaciones) | ✅ v2 |
 
 ## Regla del README
 README progresivo: **contexto teórico, conceptual y macro primero**; en cada componente, el detalle técnico al final. Incluye cómo funciona, los pasos para ejecutarlo y las alternativas de ejecución o despliegue (local primero).
@@ -1096,10 +1096,9 @@ La sección **Project Structure** y el esqueleto completo, que se crea vacío en
 | **M4 · La cifra** | **Primera cifra honesta para el CV** | `bench/run.py`, `report.py`, `stats_sampler`; validación de `gen_lag`; manifiestos; E1 (3 repeticiones), E2, E3 | Tabla de resultados generada; gráfica del codo; throughput sostenido definido con las 4 condiciones de §5.4; **primera versión de la frase del CV** | §14 How We Measure, §15 Results v1, §16 Bottleneck Analysis v1, TL;DR v1 | C6 (nota 04) | M |
 | **M5 · Observabilidad** | Operar y diagnosticar en vivo | Catálogo de métricas; dashboards D1–D3 provisionados; reglas de alerta + SLO burn rate; propagación de OTel por headers (1%); E9 | Los dashboards cargan solos; una alerta se dispara de forma controlada; una traza de punta a punta visible (`full` u opcional en `lite`); E9 cuantificado | §17 Observability | C6 completo | M |
 | **M6 · MLOps online** | El ciclo de vida del modelo en vivo | Auditor + Postgres + vistas; challenger MLP (PyTorch → ONNX) en shadow; D4; `make promote`; **demo de drift** + GIF; E8 | Champion vs challenger con etiquetas reales; E8 ≈ 0 de impacto; la demo de drift es reproducible con un comando; GIF grabado | §13 Model Lifecycle, §7 Shadow/Auditor | C4 (nota 04) | L |
-| **M6b · Backtesting y gobernanza** (§13) | Evaluación offline reproducible sobre datos versionados | *Processing Job* local de SageMaker sobre MinIO; Evidently; reportes Pandas; *dataset card* | `make backtest` produce champion vs challenger desde MinIO; `make drift-report` genera el reporte de Evidently | §13 Model Lifecycle (gobernanza) | — | M |
+| **M6b · Backtesting y gobernanza** (§13) | Evaluación offline reproducible sobre datos versionados | job batch en contenedor (componente KFP ejecutado con `kfp.local`) sobre MinIO; Evidently; reportes Pandas; *dataset card* | `make backtest` produce champion vs challenger desde MinIO; `make drift-report` genera el reporte de Evidently | §13 Model Lifecycle (gobernanza) | — | M |
 | **M7 · Explainer** | "XGBoost decide, el LLM redacta" | SHAP + prompt; gateway con `mock` → `ollama`; backpressure y muestreo; fallback de plantilla; D5; API `GET /decisions/{id}` | Explicaciones en `explanations` y Postgres; el p95 del camino crítico **no cambia** con el explainer activo; el fallback funciona con el gateway caído | §7 Explainer y API | — | M |
 | **M8 · Resiliencia** | Fallar con elegancia y demostrarlo | Toxiproxy; `chaos/run.py` + `verify.py`; F1–F10; política de modo degradado; runbooks; E5 | Las 10 fallas ejecutadas con hipótesis confirmadas o refutadas y documentadas; 0 perdidos en F1/F2/F5; tabla de resiliencia | §18 Resilience, runbooks | C1 (nota 03) | L |
-| **M8b · Exportar el grafo** (§13) | P1 alimenta el GraphRAG de P4 | Topic `entity-edges` + vista `v_entity_edges` + contrato compartido | Test de contrato en verde; P4 carga el histórico desde la vista | Integrations | — | S |
 | **M9 · Experimentos restantes** | Completar los trade-offs | E4 (Triton en escalones bajos), E6, E7, E10 | Cada experimento con su gráfica y conclusión de 2–3 líneas | §15 Results completo, §16 v2 | C4 completo, C2 (nota 04) | M |
 | **M10 · Pulido y publicación** | Listo para recruiters | Lessons learned, limitations, glosario, Mermaid + PNG, frase final del CV, revisión completa del README, tag `v1.0` | Una persona ajena lo levanta desde el README sin ayuda (prueba con alguien o en Codespaces); frase del CV con cifras y hardware | §26–29, TL;DR final | — | M |
 | **M11 · `⏳ 16GB`** | Cifras con el hardware mejorado | Perfil `full`; E1-full; F1b–F5b; E4 completo; observabilidad completa | Resultados `v1.1` publicados junto a los de 8 GB (no los reemplazan: la comparación también cuenta una historia) | §15, §18, §19 actualizados | — | M |
@@ -1123,7 +1122,6 @@ M0 → M1 → M2 ──► M3 → M4 (🎯 primera cifra del CV)
 - Canary real (un porcentaje del tráfico al challenger) después del shadow.
 - Grafana Cloud free con dashboards públicos (§9.6 D).
 - Integración con P2: el router consulta `GET /decisions/{id}` ante una disputa de pago.
-- Integración con P4: el grafo de entidades se alimenta en vivo desde `entity-edges` (`⏳ 16GB`, con P1 y P4 levantados a la vez).
 
 ---
 
@@ -1192,18 +1190,17 @@ Si el tiempo aprieta, se recorta en este orden (de lo primero que se sacrifica a
 
 ## 13. v2 — Absorción de los proyectos del CV en P1
 
-> **Decisión (2026-10-06):** los tres proyectos del CV quedan aparte, y su contenido se reparte en P0–P4 como componentes reales. En P1 entran la **gobernanza de modelos y datos** del *LLM Evaluation Suite* (drift con equivalencia a SageMaker Model Monitor, jobs de evaluación tipo SageMaker Processing sobre datasets versionados en S3, auditoría de alucinaciones) y el rol de **fuente del grafo** para P4.
+> **Decisión (2026-10-06, ajustada):** los tres proyectos del CV quedan aparte, y su contenido se reparte en P0–P4 como componentes reales. En P1 entra la **gobernanza de modelos y datos** del *LLM Evaluation Suite*: drift, evaluación batch sobre datasets versionados y auditoría de alucinaciones. **Todo local:** el usuario descartó SageMaker (ni en la nube ni en modo local); los jobs corren como contenedores propios.
 
 ### 13.1 Mapa de absorción
 | Origen (CV) | Elemento | Cómo existe en P1 | Hito |
 |---|---|---|---|
-| Evaluation Suite | **SageMaker Model Monitor** (drift, observabilidad continua) | **Evidently** sobre la ventana reciente de `decisions` + features servidas (Postgres) frente al baseline de entrenamiento: drift de datos (PSI, Wasserstein, chi²), drift de predicción y calidad cuando llegan etiquetas. Reportes HTML versionados y *test suites* que alimentan la alerta de drift de §6 y la demo de §4.11. El README documenta la equivalencia: *baseline job → constraints → monitoring schedule → violations* | M6 |
-| Evaluation Suite | **SageMaker Processing Jobs** sobre datasets en **S3** | **Backtesting offline** como *Processing Job* en modo local del SDK de SageMaker: un contenedor lee el histórico Parquet desde **MinIO** (API S3, versionado de objetos), re-puntúa con champion y challenger y escribe métricas por segmento. Corre igual en SageMaker real cambiando la sesión (opcional, decisión pendiente en P2 §12.6) | M6b |
+| Evaluation Suite | Monitoreo de drift y observabilidad continua del modelo | **Evidently** sobre la ventana reciente de `decisions` + features servidas (Postgres) frente al baseline de entrenamiento: drift de datos (PSI, Wasserstein, chi²), drift de predicción y calidad cuando llegan etiquetas. Reportes HTML versionados y *test suites* que alimentan la alerta de drift de §6 y la demo de §4.11. Patrón: *baseline → constraints → schedule (cron local) → violations* | M6 |
+| Evaluation Suite | Jobs de evaluación distribuida sobre datasets versionados en **S3** | **Backtesting offline** como job batch en contenedor (componente KFP ejecutado con `kfp.local`): lee el histórico Parquet desde **MinIO** (API S3, versionado de objetos), re-puntúa con champion y challenger y escribe métricas por segmento. El mismo contenedor corre con `docker run` o dentro del pipeline KFP de P2 | M6b |
 | Evaluation Suite | Datasets versionados y gobernanza | MinIO como *data lake* local: `raw/`, `features/`, `training/` con versionado de objetos; manifiesto con hash de contenido; el digest del dataset va en cada corrida de MLflow (linaje); *dataset card* del generador sintético (distribuciones, tasa de fraude, casos difíciles, ruido de etiquetas) | M3, M6b |
 | Evaluation Suite | Auditoría de alucinaciones | Las explicaciones del Explainer se auditan con `judgekit` (P2 §12): cada afirmación se contrasta con los valores SHAP y las features reales del pago ("monto 8× su promedio" debe coincidir con los datos). Métrica `explanation_faithfulness` y `unsupported_claim_rate`; compuerta antes de cambiar el prompt o el modelo del Explainer | M7 |
 | Evaluation Suite | Pandas | Reportes de backtesting y de auditoría como DataFrames (Polars sigue en el Profile Builder por rendimiento; la comparación Polars vs Pandas en el mismo job se documenta) | M6b |
 | Go Edge Gateway | Semantic cache, circuit breaker, fallback local | Heredados vía P0. El Explainer llama al alias `fast` con `X-Priority: batch` (el gateway lo descarta primero bajo carga) y `X-Cache-Scope: private` (cada explicación es única: **no** se cachea semánticamente; las guardas numéricas de P0 lo rechazarían igual) | M7 |
-| Multi-Agent Research | Fuente de datos para GraphRAG | P1 publica las relaciones entre entidades para el grafo de P4: topic `entity-edges` (usuario–tarjeta–dispositivo–IP–comercio, con la decisión y el score) y una vista `v_entity_edges` en Postgres para la carga histórica. Contrato en `fraudcore/contracts.py` | M8b |
 
 ### 13.2 Cambios en el presupuesto de recursos
 - `llm-gateway` en el perfil `explain`: ~450 MB (antes ~150 MB) porque la caché semántica y los guardrails son obligatorios en P0 y cargan sus modelos ONNX. Total del perfil `ops` ≈ 5 GB 🟡; si no entra, el Explainer usa el gateway del Compose standalone de P0.
@@ -1215,9 +1212,8 @@ Si el tiempo aprieta, se recorta en este orden (de lo primero que se sacrifica a
 |---|---|
 | M3 | El histórico offline se escribe en MinIO con manifiesto y digest en MLflow |
 | M6 | + Evidently (reportes y *test suites*) como detector de la demo de drift |
-| **M6b · Backtesting y gobernanza** (nuevo, M) | *Processing Job* local de SageMaker sobre MinIO; reportes Pandas por segmento; *dataset card*. Criterio: `make backtest` produce la tabla champion vs challenger desde MinIO, sin tocar el stack en vivo |
+| **M6b · Backtesting y gobernanza** (nuevo, M) | job batch en contenedor (componente KFP ejecutado con `kfp.local`) sobre MinIO; reportes Pandas por segmento; *dataset card*. Criterio: `make backtest` produce la tabla champion vs challenger desde MinIO, sin tocar el stack en vivo |
 | M7 | + Auditoría de fidelidad de las explicaciones con `judgekit` y compuerta |
-| **M8b · Exportar el grafo** (nuevo, S) | Topic `entity-edges` + vista `v_entity_edges`; test de contrato compartido con P4 |
 
 ### 13.4 Frase del CV (agregado)
-> … with Evidently drift monitoring (SageMaker Model Monitor-equivalent), SageMaker Processing backtests over versioned S3 (MinIO) datasets, and LLM explanations audited for faithfulness (**{u}% unsupported claims**).
+> … with Evidently drift monitoring, containerized backtests over versioned S3-compatible (MinIO) datasets, and LLM explanations audited for faithfulness (**{u}% unsupported claims**).

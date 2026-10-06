@@ -43,31 +43,3 @@ class DecisionEvent(BaseModel):
     degraded: bool = False
     t_scheduled_ns: int
     t_decided_ns: int
-
-
-EntityType = Literal["user", "card", "device", "ip_country", "merchant"]
-
-
-class EntityEdge(BaseModel):
-    """Relationship published on topic `entity-edges` for P4's GraphRAG (PLAN §13)."""
-    src_type: EntityType
-    src_id: str
-    rel: Literal["USES_CARD", "USES_DEVICE", "CONNECTS_FROM", "PAYS"]
-    dst_type: EntityType
-    dst_id: str
-    payment_id: str
-    decision: Decision
-    score: float = Field(ge=0, le=1)
-    event_time: datetime
-
-
-def entity_edges(payment: Payment, decision: DecisionEvent) -> list[EntityEdge]:
-    """Explode one scored payment into the user-centred edges of the fraud graph."""
-    common = {"payment_id": payment.payment_id, "decision": decision.decision,
-              "score": decision.score, "event_time": payment.event_time}
-    links = [("USES_CARD", "card", payment.card_id), ("USES_DEVICE", "device", payment.device_id),
-             ("CONNECTS_FROM", "ip_country", payment.ip_country), ("PAYS", "merchant", payment.merchant_id)]
-    return [
-        EntityEdge(src_type="user", src_id=payment.user_id, rel=rel, dst_type=kind, dst_id=dst_id, **common)
-        for rel, kind, dst_id in links
-    ]
