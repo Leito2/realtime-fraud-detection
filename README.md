@@ -15,6 +15,13 @@ _Filled from `docs/results/` after milestone M4._
 Event logs and partitions · per-event vs micro-batch processing · event vs processing time · state, checkpoints and
 delivery guarantees · online vs offline features and train/serve skew · tail latency and coordinated omission ·
 champion/challenger, shadow mode, drift
+### Key technologies at a glance
+- **Kafka** — durable log that carries every payment event.
+- **Flink** — computes each user's recent behaviour in real time.
+- **Redis** — serves user features in under a millisecond.
+- **XGBoost + ONNX Runtime** — fast, explainable scoring on CPU.
+- **gRPC** — low-latency service-to-service scoring API, used when a checkout needs an answer right away.
+- **Shadow mode and drift monitoring** — new models are tested on real traffic before they replace the current one.
 ### 3. What This Project Demonstrates
 ### 4. Architecture
 ### 5. Design Decisions (ADRs)
