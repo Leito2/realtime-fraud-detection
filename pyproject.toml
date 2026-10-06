@@ -16,7 +16,7 @@ members = ["packages/*"]
 fraudcore = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "grpcio-tools>=1.66"]
 
 [tool.ruff]
 line-length = 110

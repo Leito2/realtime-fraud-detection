@@ -3,6 +3,7 @@
 > **Plan de proyecto** (vive en este repo como `PLAN.md`). **Estado:** ✅ Plan completo (12/12 módulos), listo para implementar en la fase F3 del plan de Learning.
 > Stack: Kafka (KRaft) · Flink SQL · Redis · XGBoost → ONNX Runtime · PyTorch (challenger en shadow) · MLflow · PostgreSQL · FastAPI · Prometheus + Grafana · OpenTelemetry · LLM Gateway (`llm-gateway`, Python) · Docker Compose
 > **v2 (§13):** Evidently (drift) · backtesting como job batch en contenedor (KFP local) sobre MinIO/S3 versionado · Pandas · `judgekit` (auditoría de explicaciones)
+> **v3 (§14):** gRPC (`grpc.aio`, protobuf, `buf`, deadlines, health, reflection, interceptores OTel) para el scoring síncrono
 > Gasto: **$0** (todo local).
 
 ## Módulos del plan
@@ -21,6 +22,7 @@
 | 11 | Hitos de implementación y criterios de aceptación | ✅ |
 | 12 | Riesgos y pendientes | ✅ |
 | 13 | **v2 — Absorción de los proyectos del CV** (Evidently, backtesting en contenedor sobre MinIO, auditoría de explicaciones) | ✅ v2 |
+| 14 | **v3 — Scoring síncrono con gRPC** (unario, streaming bidireccional, deadlines, E11 REST vs gRPC) | ✅ v3 |
 
 ## Regla del README
 README progresivo: **contexto teórico, conceptual y macro primero**; en cada componente, el detalle técnico al final. Incluye cómo funciona, los pasos para ejecutarlo y las alternativas de ejecución o despliegue (local primero).
@@ -304,7 +306,7 @@ El plan es implementar A, medir B y documentar C. También hay que verificar que
 - `/health` y `/metrics`.
 
 **🔧 Detalle técnico.** Uvicorn con 1 worker en `lite`. Usa la misma librería de features e inferencia que el scorer (paquete compartido `fraudcore/`).
-**🔁 Alternativas.** Endpoint gRPC (para la variante de baja latencia; tu CV ya tiene gRPC).
+**🔁 Alternativas.** El camino gRPC de máquina a máquina se implementa aparte, en §14.
 
 ### 3.8 Shadow Scorer — challenger (`scorer/` en modo shadow)
 **🧠 Concepto.** *Shadow mode* evalúa un modelo nuevo con tráfico **real**, sin que sus decisiones tengan efecto. Es la forma segura de promover modelos.
@@ -1098,6 +1100,7 @@ La sección **Project Structure** y el esqueleto completo, que se crea vacío en
 | **M6 · MLOps online** | El ciclo de vida del modelo en vivo | Auditor + Postgres + vistas; challenger MLP (PyTorch → ONNX) en shadow; D4; `make promote`; **demo de drift** + GIF; E8 | Champion vs challenger con etiquetas reales; E8 ≈ 0 de impacto; la demo de drift es reproducible con un comando; GIF grabado | §13 Model Lifecycle, §7 Shadow/Auditor | C4 (nota 04) | L |
 | **M6b · Backtesting y gobernanza** (§13) | Evaluación offline reproducible sobre datos versionados | job batch en contenedor (componente KFP ejecutado con `kfp.local`) sobre MinIO; Evidently; reportes Pandas; *dataset card* | `make backtest` produce champion vs challenger desde MinIO; `make drift-report` genera el reporte de Evidently | §13 Model Lifecycle (gobernanza) | — | M |
 | **M7 · Explainer** | "XGBoost decide, el LLM redacta" | SHAP + prompt; gateway con `mock` → `ollama`; backpressure y muestreo; fallback de plantilla; D5; API `GET /decisions/{id}` | Explicaciones en `explanations` y Postgres; el p95 del camino crítico **no cambia** con el explainer activo; el fallback funciona con el gateway caído | §7 Explainer y API | — | M |
+| **M7c · gRPC** (§14) | Scoring síncrono para el checkout | `scoring.proto` (contrato ya en el repo), servidor `grpc.aio`, cliente con deadlines, health, reflection, interceptores, `buf` en la CI, experimento E11 | `grpcurl` llama a los 3 métodos; deadline vencido → `DEADLINE_EXCEEDED` (test); tabla REST vs gRPC publicada | §14 gRPC | C5 (`10/48`) | M |
 | **M8 · Resiliencia** | Fallar con elegancia y demostrarlo | Toxiproxy; `chaos/run.py` + `verify.py`; F1–F10; política de modo degradado; runbooks; E5 | Las 10 fallas ejecutadas con hipótesis confirmadas o refutadas y documentadas; 0 perdidos en F1/F2/F5; tabla de resiliencia | §18 Resilience, runbooks | C1 (nota 03) | L |
 | **M9 · Experimentos restantes** | Completar los trade-offs | E4 (Triton en escalones bajos), E6, E7, E10 | Cada experimento con su gráfica y conclusión de 2–3 líneas | §15 Results completo, §16 v2 | C4 completo, C2 (nota 04) | M |
 | **M10 · Pulido y publicación** | Listo para recruiters | Lessons learned, limitations, glosario, Mermaid + PNG, frase final del CV, revisión completa del README, tag `v1.0` | Una persona ajena lo levanta desde el README sin ayuda (prueba con alguien o en Codespaces); frase del CV con cifras y hardware | §26–29, TL;DR final | — | M |
@@ -1217,3 +1220,61 @@ Si el tiempo aprieta, se recorta en este orden (de lo primero que se sacrifica a
 
 ### 13.4 Frase del CV (agregado)
 > … with Evidently drift monitoring, containerized backtests over versioned S3-compatible (MinIO) datasets, and LLM explanations audited for faithfulness (**{u}% unsupported claims**).
+
+
+---
+
+## 14. v3 — Scoring síncrono con gRPC
+
+> **Decisión (2026-10-06):** el usuario pide implementar gRPC. P1 es el lugar natural: es el proyecto de **baja latencia**, y un pago con tarjeta real necesita una decisión **síncrona** dentro de un plazo (el checkout espera la respuesta), además del camino asíncrono por Kafka que ya existe.
+
+### 14.1 Concepto
+**gRPC** es un framework de llamadas a procedimientos remotos (RPC) sobre **HTTP/2** con mensajes **Protocol Buffers** (binarios, tipados y con esquema). Frente a REST con JSON:
+- **Contrato primero:** el `.proto` define servicios y mensajes; el código cliente y servidor se genera. Cambiar el contrato sin romper clientes se verifica en la CI (`buf breaking`).
+- **Menos bytes y menos CPU:** protobuf serializa más compacto y más rápido que JSON.
+- **HTTP/2:** multiplexa muchas llamadas en una sola conexión y permite **streaming** en ambos sentidos.
+- **Deadlines de primera clase:** el cliente dice cuánto puede esperar y el servidor lo ve; si el plazo vence, se cancela todo el camino.
+
+Es el estándar para comunicación **servicio a servicio** de baja latencia (Triton, por ejemplo, ya expone gRPC). Para navegadores se sigue usando REST o SSE.
+
+### 14.2 Cómo funciona aquí
+```
+ Pasarela de pagos (simulada) ──gRPC Score (deadline 50 ms)──► scoring-grpc ──► Redis (perfil + velocity) ──► ONNX ──► decisión
+ Cliente de alto volumen ──gRPC ScoreStream (bidireccional)──► scoring-grpc (micro-lotes)
+ P2 router (disputas) ──gRPC GetDecision──► scoring-grpc ──► Postgres
+ Camino asíncrono (sin cambios): Kafka → Flink → scorer → decisions
+```
+- **Contrato:** `proto/fraud/v1/scoring.proto` con tres RPCs: `Score` (unario), `ScoreStream` (streaming bidireccional) y `GetDecision` (consulta).
+- **Servidor:** `services/scoring_grpc/` con `grpc.aio` (asíncrono). Reutiliza `fraudcore` (mismas features e inferencia que el scorer de Kafka: sin *train/serve skew*). La velocity se lee de Redis (la que mantiene el Feature Writer).
+- **Sin duplicar FastAPI:** la API REST de §3.7 se queda para demos y analistas; gRPC es el camino de máquina a máquina.
+
+### 14.3 Detalle técnico
+| Tema | Implementación |
+|---|---|
+| Generación de código | `grpcio-tools` (Python); `buf` para lint y detección de cambios incompatibles en la CI |
+| Deadlines | El cliente fija 50 ms; el servidor revisa `context.time_remaining()` y responde `degraded=true` con features de respaldo si Redis no alcanza a responder |
+| Resiliencia del cliente | *Service config* con reintentos solo para `UNAVAILABLE`, *keepalive*, *channel* reutilizado (nunca uno por request) |
+| Errores | Códigos de estado gRPC (`INVALID_ARGUMENT`, `DEADLINE_EXCEEDED`, `UNAVAILABLE`) con detalles, no excepciones genéricas |
+| Health y descubrimiento | `grpc.health.v1` (para Docker y balanceadores) y *server reflection* (para `grpcurl`) |
+| Observabilidad | Interceptores de servidor: métricas de Prometheus por método y código, y spans de OTel con propagación de contexto en la metadata |
+| Seguridad | TLS con certificado autofirmado en local (opcional) y API key por metadata |
+| Streaming | `ScoreStream` agrupa en micro-lotes (hasta N mensajes o T ms) para usar la inferencia por lote de ONNX |
+
+### 14.4 Experimento E11: REST vs gRPC vs streaming
+Mismo modelo, misma máquina, carga open-loop (ghz para gRPC, k6 para REST):
+| Variante | Qué se mide |
+|---|---|
+| REST + JSON (FastAPI) | p50/p95/p99, throughput, bytes por request, CPU |
+| gRPC unario | Ídem |
+| gRPC streaming bidireccional | Ídem, con distintos tamaños de micro-lote |
+
+Resultado esperado (a confirmar): gRPC baja el overhead de serialización y de conexión; el streaming gana en throughput a costa de algo de latencia por el micro-lote. Si la diferencia es pequeña (la inferencia domina), también es un resultado honesto y se publica.
+
+### 14.5 Hito y frase del CV
+| Hito | Objetivo | Criterios de aceptación | Tamaño |
+|---|---|---|---|
+| **M7c · gRPC** (después de M4) | `scoring.proto`, servidor `grpc.aio`, cliente con deadlines, health, reflection, interceptores, `buf` en la CI, E11 | `grpcurl` llama a los 3 métodos; un deadline vencido devuelve `DEADLINE_EXCEEDED` (test); tabla E11 publicada | M |
+
+> … exposes a **gRPC** scoring API (unary, bidirectional streaming, deadlines) next to the Kafka path: **p95 {g} ms vs {r} ms over REST/JSON** on the same model.
+
+El contrato y su test ya están en el repo desde el M0 (`proto/fraud/v1/scoring.proto`, `tests/test_proto_contract.py`).

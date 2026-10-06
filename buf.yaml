@@ -1,0 +1,9 @@
+# buf: lint + breaking-change detection for the gRPC contract (PLAN §14). CI runs `buf lint` and
+# `buf breaking --against '.git#branch=main'` once the gRPC milestone lands.
+version: v2
+modules:
+  - path: proto
+lint:
+  use: [STANDARD]
+breaking:
+  use: [FILE]

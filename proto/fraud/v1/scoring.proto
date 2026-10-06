@@ -1,0 +1,61 @@
+// Synchronous scoring contract (PLAN §14). The Kafka path stays asynchronous; this is the "authorize at checkout"
+// path, where a payment gateway must get a decision inside a deadline before approving the card.
+syntax = "proto3";
+
+package fraud.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/Leito2/realtime-fraud-detection/gen/go/fraud/v1;fraudv1";
+
+service FraudScoring {
+  // One payment, one decision. Clients MUST set a deadline (default budget: 50 ms).
+  rpc Score(ScoreRequest) returns (ScoreResponse);
+  // Long-lived bidirectional stream for high-throughput callers (micro-batched server side).
+  rpc ScoreStream(stream ScoreRequest) returns (stream ScoreResponse);
+  // Decision already taken by the async (Kafka) path — used by P2 for payment disputes.
+  rpc GetDecision(GetDecisionRequest) returns (ScoreResponse);
+}
+
+enum Channel {
+  CHANNEL_UNSPECIFIED = 0;
+  CHANNEL_WEB = 1;
+  CHANNEL_APP = 2;
+  CHANNEL_POS = 3;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_APPROVE = 1;
+  DECISION_REVIEW = 2;
+  DECISION_BLOCK = 3;
+}
+
+message ScoreRequest {
+  string payment_id = 1;
+  string user_id = 2;
+  string card_id = 3;
+  double amount = 4;
+  string currency = 5;          // ISO 4217
+  string merchant_id = 6;
+  string mcc = 7;
+  string country = 8;           // ISO 3166-1 alpha-2
+  string device_id = 9;
+  string ip_country = 10;
+  Channel channel = 11;
+  google.protobuf.Timestamp event_time = 12;
+}
+
+message ScoreResponse {
+  string payment_id = 1;
+  Decision decision = 2;
+  float score = 3;
+  string model_version = 4;
+  string threshold_set = 5;
+  bool degraded = 6;            // true when features came from fallbacks (e.g. Redis timeout)
+  uint32 server_latency_us = 7;
+}
+
+message GetDecisionRequest {
+  string payment_id = 1;
+}
