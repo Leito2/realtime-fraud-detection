@@ -1,0 +1,4 @@
+batch: { max_messages: 500, max_wait_ms: 5 }   # experiment E2 sweeps these
+onnx: { intra_op_num_threads: 1 }
+redis: { timeout_ms: 5 }
+model: { registry_alias: champion, poll_seconds: 30 }

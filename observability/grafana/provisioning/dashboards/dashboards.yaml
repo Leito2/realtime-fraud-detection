@@ -1,0 +1,3 @@
+apiVersion: 1
+providers:
+  - { name: fraud, folder: Fraud Platform, type: file, allowUiUpdates: false, options: { path: /var/lib/grafana/dashboards } }

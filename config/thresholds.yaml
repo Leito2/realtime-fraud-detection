@@ -1,0 +1,8 @@
+# Chosen by expected cost on validation data (PLAN.md §4.6). Placeholder until M3.
+threshold_set: v0-placeholder
+review: 0.30
+block: 0.80
+degraded:            # policy when Redis profiles are unavailable (PLAN.md §7.4)
+  review: 0.20
+  block: 0.70
+  max_auto_approve_amount: 500

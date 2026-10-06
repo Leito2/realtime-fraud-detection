@@ -1,0 +1,32 @@
+[project]
+name = "realtime-fraud-detection"
+version = "0.1.0"
+description = "Real-time fraud detection: Kafka + Flink SQL + Redis + XGBoost/ONNX, measured end to end."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["fraudcore"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+fraudcore = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fraudcore"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages/fraudcore/tests", "tests"]

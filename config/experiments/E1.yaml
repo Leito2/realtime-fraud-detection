@@ -1,0 +1,8 @@
+id: E1
+description: Baseline step load (lite profile) — the CV number
+profile: core
+steps_eps: [1000, 2000, 5000, 8000, 10000]
+warmup_s: 60
+measure_s: 180
+repetitions: 3
+slo_p95_ms: 80

@@ -1,0 +1,27 @@
+# Laptop profile (course 10/46, note 06). Verify keys against the pinned Flink version.
+taskmanager:
+  numberOfTaskSlots: 4
+  memory:
+    process:
+      size: 1200m
+jobmanager:
+  memory:
+    process:
+      size: 600m
+parallelism:
+  default: 2
+execution:
+  buffer-timeout: 5 ms          # default 100 ms — the biggest latency knob (experiment E3)
+  checkpointing:
+    interval: 10 s
+    incremental: true
+pipeline:
+  object-reuse: true
+state:
+  backend:
+    type: rocksdb
+metrics:
+  reporter:
+    prom:
+      factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+      port: 9249
