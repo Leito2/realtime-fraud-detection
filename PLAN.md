@@ -305,7 +305,7 @@ El plan es implementar A, medir B y documentar C. También hay que verificar que
 - `GET /model`: devuelve la versión del champion.
 - `/health` y `/metrics`.
 
-**🔧 Detalle técnico.** Uvicorn con 1 worker en `lite`. Usa la misma librería de features e inferencia que el scorer (paquete compartido `fraudcore/`).
+**🔧 Detalle técnico.** Uvicorn con 1 worker en `lite`. `POST /score` llama al caso de uso `score_sync` de la capa `application` del scorer (ADR-0002): una sola implementación del scoring, con las features de `fraudcore`.
 **🔁 Alternativas.** El camino gRPC de máquina a máquina se implementa aparte, en §14.
 
 ### 3.8 Shadow Scorer — challenger (`scorer/` en modo shadow)
@@ -924,16 +924,23 @@ realtime-fraud-detection/
 ├── .devcontainer/devcontainer.json   (opción C: Codespaces)
 │
 ├── packages/
-│   └── fraudcore/                ← código compartido: la clave contra el skew
-│       ├── features.py           (especificación + features derivadas + orden de columnas)
-│       ├── contracts.py          (esquemas de eventos con msgspec/pydantic)
+│   ├── fraudcore/                ← dominio compartido, SIN I/O: la clave contra el skew (anillo Entities)
+│   │   ├── features.py           (especificación + features derivadas + orden de columnas)
+│   │   ├── contracts.py          (esquemas de eventos con pydantic)
+│   │   └── thresholds.py         (score → APPROVE / REVIEW / BLOCK)
+│   └── fraudinfra/               ← infraestructura compartida (se crea cuando se necesite, ADR-0002)
 │       ├── model_io.py           (cargar desde el registry, caché, validación previa al swap)
-│       ├── thresholds.py
 │       └── telemetry.py          (métricas, OTel, headers de Kafka)
 │
-├── services/                     ← cada uno: src/ + tests/ + entrypoint
+├── services/                     ← cada uno: pyproject + src/<nombre>/ + tests/ (miembro del workspace)
 │   ├── generator/
-│   ├── scorer/                   (--mode champion | shadow | triton-client)
+│   ├── scorer/                   (Clean Architecture; --mode champion | shadow | triton-client)
+│   │   └── src/scorer/
+│   │       ├── domain/           (reglas propias, p. ej. la política de modo degradado §7.4)
+│   │       ├── application/      (casos de uso score_batch / score_sync + ports.py)
+│   │       ├── adapters/         (onnx, triton, redis, productor de Kafka)
+│   │       ├── entrypoints/      (consumer de Kafka, servidor gRPC de §14)
+│   │       └── main.py           (composition root: elige adaptadores según --mode)
 │   ├── api/
 │   ├── feature_writer/
 │   ├── profile_builder/
@@ -987,7 +994,10 @@ realtime-fraud-detection/
 
 **Decisiones de estructura:**
 - **Una sola imagen de Python** para todos los servicios: ahorra disco y tiempo de build, y garantiza las mismas versiones de librerías en todas partes.
-- **`fraudcore` compartido:** el entrenamiento, el scorer, la API y el explainer importan las mismas funciones de features. Es la defensa estructural contra el *train/serve skew* (§4.3).
+- **`fraudcore` compartido:** el entrenamiento, el scorer, la API y el explainer importan las mismas funciones de features. Es la defensa estructural contra el *train/serve skew* (§4.3). No tiene I/O ni dependencias de infraestructura; eso va en `fraudinfra`.
+- **Dos niveles de arquitectura ([ADR-0002](docs/adr/0002-code-organization-clean-architecture.md)):** a nivel de sistema, servicios orientados a eventos (uno por proceso, hablan por Kafka). Dentro de cada servicio, **Clean Architecture solo donde paga**: `scorer` y `explainer` (reglas de negocio + varias implementaciones de una dependencia o varias formas de invocarlos). `generator`, `feature_writer`, `profile_builder`, `auditor`, `latency` y `api` son delgados: funciones puras + un `main.py` que hace el I/O.
+- **Puertos con forma de lote en el camino crítico:** `get_many`, `predict(matriz)`, `publish_batch`. Nunca una llamada por evento que esconda N idas por red.
+- **La regla de dependencias** (los imports apuntan hacia adentro) se verifica en la CI con contratos de `import-linter`.
 - **Un `docker-compose.yml` con profiles**, en vez de varios archivos: una sola fuente de verdad.
 - Los resultados en `docs/` son **generados**, no escritos a mano: el README enlaza a datos reproducibles.
 
@@ -1092,7 +1102,7 @@ La sección **Project Structure** y el esqueleto completo, que se crea vacío en
 | Hito | Objetivo | Tareas principales | Criterios de aceptación | README | Curso | Tamaño |
 |---|---|---|---|---|---|---|
 | **M0 · Bootstrap** | Repo listo para construir | Workspace de uv, `fraudcore` vacío, Compose con profiles (esqueleto), `doctor.py`, CI, `.gitattributes`, devcontainer, esqueleto del README | `make doctor` pasa; CI en verde; el README tiene todas sus secciones | §1 Problem, §2 Core Concepts (borrador), §25 Structure | — | S |
-| **M1 · Esqueleto andante** | Un pago viaja de punta a punta | Generador open-loop básico → Kafka (topics) → Flink SQL pass-through con 1 feature → scorer con regla dummy → `decisions` → Latency Collector mínimo; `make smoke` | `make smoke` imprime p50/p95/p99 a 2k ev/s; **`docker stats` real que reemplaza las estimaciones de §8** | §4 Architecture v1, §20 Quickstart v1 | C1 (notas 00–04) | M |
+| **M1 · Esqueleto andante** | Un pago viaja de punta a punta | Generador open-loop básico → Kafka (topics) → Flink SQL pass-through con 1 feature → scorer con regla dummy (ya con la estructura de Clean Architecture y los contratos de `import-linter`, ADR-0002) → `decisions` → Latency Collector mínimo; `make smoke` | `make smoke` imprime p50/p95/p99 a 2k ev/s; **`docker stats` real que reemplaza las estimaciones de §8** | §4 Architecture v1, §20 Quickstart v1 | C1 (notas 00–04) | M |
 | **M2 · Features en tiempo real** | Las features correctas, rápidas y verificadas | **Spike S1** (opción A vs B); ventanas `OVER` de §4.3; `buffer-timeout`; Profile Builder + Redis; Feature Writer; **test de paridad de features** | El test de paridad pasa en la CI; S1 decidido con datos (ADR actualizado); E3 preliminar | §5 Design Decisions, §7 Generator/Kafka/Flink/Redis/Profile Builder, §10 Feature Parity | C1 completo, C2, C3 | L |
 | **M3 · El modelo** | Champion servido desde el registry | Histórico offline; baseline de reglas; XGBoost + Optuna; umbrales por costo; export a ONNX + paridad + benchmark; MLflow; carga del alias y hot-reload en el scorer | Tabla de evaluación offline (reglas vs XGB vs ONNX); paridad ONNX < 1e-5; el scorer decide con el champion; el hot-reload funciona sin perder eventos | §9 Why XGBoost, §11 Thresholds, §12 Offline Evaluation, §7 Scorer y MLflow | C4 (notas 00–01) | L |
 | **M4 · La cifra** | **Primera cifra honesta para el CV** | `bench/run.py`, `report.py`, `stats_sampler`; validación de `gen_lag`; manifiestos; E1 (3 repeticiones), E2, E3 | Tabla de resultados generada; gráfica del codo; throughput sostenido definido con las 4 condiciones de §5.4; **primera versión de la frase del CV** | §14 How We Measure, §15 Results v1, §16 Bottleneck Analysis v1, TL;DR v1 | C6 (nota 04) | M |
@@ -1245,7 +1255,7 @@ Es el estándar para comunicación **servicio a servicio** de baja latencia (Tri
  Camino asíncrono (sin cambios): Kafka → Flink → scorer → decisions
 ```
 - **Contrato:** `proto/fraud/v1/scoring.proto` con tres RPCs: `Score` (unario), `ScoreStream` (streaming bidireccional) y `GetDecision` (consulta).
-- **Servidor:** `services/scoring_grpc/` con `grpc.aio` (asíncrono). Reutiliza `fraudcore` (mismas features e inferencia que el scorer de Kafka: sin *train/serve skew*). La velocity se lee de Redis (la que mantiene el Feature Writer).
+- **Servidor:** `grpc.aio` (asíncrono), implementado como un *entrypoint* del scorer (`services/scorer/src/scorer/entrypoints/grpc_server.py`, ADR-0002) y desplegado como su propio contenedor `scoring-grpc` desde la misma imagen. Llama al caso de uso `score_sync`, que comparte dominio, features (`fraudcore`) y adaptador de modelo con el camino de Kafka: sin *train/serve skew*. La velocity se lee de Redis (la que mantiene el Feature Writer).
 - **Sin duplicar FastAPI:** la API REST de §3.7 se queda para demos y analistas; gRPC es el camino de máquina a máquina.
 
 ### 14.3 Detalle técnico

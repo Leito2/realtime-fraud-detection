@@ -24,6 +24,28 @@ champion/challenger, shadow mode, drift
 - **Shadow mode and drift monitoring** — new models are tested on real traffic before they replace the current one.
 ### 3. What This Project Demonstrates
 ### 4. Architecture
+
+#### How the code is organized
+The architecture works at two levels, and each level has its own pattern.
+
+**System level: event-driven services.** Each program that runs (generator, scorer, explainer, auditor, …)
+is its own service under `services/`. Services talk through Kafka topics and never call each other on the
+critical path. Each one can be scaled, restarted or broken on purpose without touching the others. Flink
+jobs, infrastructure and dashboards live next to them, grouped by technology, because they hold no
+business logic.
+
+**Code level: Clean Architecture where it pays.** Inside the scorer and the explainer, business rules sit
+at the center and know nothing about Kafka, Redis, ONNX or the LLM. Those are adapters plugged in from
+outside, and imports only point inward. That's what lets the same scoring logic serve Kafka, gRPC and
+REST, and run on ONNX Runtime or Triton, without being written twice. Services that are just a
+consume → transform → write loop stay as plain modules: adding layers to them would add files, not
+clarity.
+
+The shared package `fraudcore` holds the rules every part of the system must agree on (feature
+definitions, event contracts, thresholds). Training and serving import the same code, which is how
+train/serve skew is prevented by construction. Full reasoning:
+[ADR-0002](docs/adr/0002-code-organization-clean-architecture.md).
+
 ### 5. Design Decisions (ADRs)
 ### 6. The Journey of a Payment
 
