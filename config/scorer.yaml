@@ -2,3 +2,4 @@ batch: { max_messages: 500, max_wait_ms: 5 }   # experiment E2 sweeps these
 onnx: { intra_op_num_threads: 1 }
 redis: { timeout_ms: 5 }
 model: { registry_alias: champion, poll_seconds: 30 }
+kafka: { bootstrap: "kafka:29092", input_topic: payments-enriched, output_topic: decisions, shadow_topic: shadow-scores, dlq_topic: dlq }

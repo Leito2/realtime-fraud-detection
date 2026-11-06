@@ -1,0 +1,53 @@
+from scorer.application.score_batch import ScoreBatch
+from scorer.domain.degraded import DegradedPolicy
+from scorer.testing import FakeModel, FakeProfileStore, FixedClock, ListSink
+
+from fraudcore.contracts import EnrichedPayment
+from fraudcore.thresholds import Thresholds
+
+
+def event(pid: str, user: str = "u_1", amount: float = 50.0) -> EnrichedPayment:
+    return EnrichedPayment(
+        payment_id=pid, user_id=user, card_id="c", amount=amount, currency="USD", merchant_id="m",
+        mcc="5411", country="CO", device_id="d", ip_country="CO", channel="web",
+        event_time="2026-10-05T14:03:22.123Z", t_scheduled_ns=1_000, t_sent_ns=1_100,
+        f_cnt_10m=1, f_sum_10m=amount, f_max_10m=amount, f_small_tx_cnt_10m=0)
+
+
+def build(scores, profiles=None, fail=False):
+    sink = ListSink()
+    store = FakeProfileStore(profiles, fail)
+    model = FakeModel(scores)
+    uc = ScoreBatch(
+        profiles=store, model=model, sink=sink, thresholds=Thresholds("v1", 0.3, 0.8),
+        policy=DegradedPolicy(Thresholds("v1-degraded", 0.2, 0.7), max_auto_approve_amount=500),
+        clock=FixedClock(9_000))
+    return uc, store, model, sink
+
+
+def test_one_profile_lookup_and_one_inference_per_batch():
+    uc, store, model, sink = build([0.1, 0.5, 0.9])
+    out = uc([event("a"), event("b", "u_2"), event("c", "u_3")])
+    assert store.calls == 1 and len(model.batches) == 1 and sink.batches == 1
+    assert [d.decision for d in out] == ["APPROVE", "REVIEW", "BLOCK"]
+
+
+def test_decision_carries_measurement_fields_and_model_identity():
+    uc, *_ = build([0.1])
+    d = uc([event("a")])[0]
+    assert (d.payment_id, d.user_id, d.model, d.model_version) == ("a", "u_1", "fake", "1")
+    assert (d.t_scheduled_ns, d.t_decided_ns, d.threshold_set, d.degraded) == (1_000, 9_000, "v1", False)
+
+
+def test_profile_outage_marks_degraded_and_applies_the_conservative_policy():
+    uc, _, _, sink = build([0.25, 0.05], fail=True)
+    out = uc([event("a"), event("b", amount=900.0)])
+    assert all(d.degraded for d in out)
+    assert [d.decision for d in out] == ["REVIEW", "REVIEW"]      # 0.25 >= 0.2; 900 > limit
+    assert out[0].threshold_set == "v1-degraded"
+    assert sink.published == out
+
+
+def test_empty_batch_does_nothing():
+    uc, store, model, sink = build([])
+    assert uc([]) == [] and store.calls == 0 and not model.batches and sink.batches == 0

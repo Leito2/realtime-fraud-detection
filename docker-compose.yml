@@ -22,30 +22,56 @@ services:
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
     ports: ["9092:9092"]
     mem_limit: 850m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
 
   kafka-init:
     <<: *core
     image: apache/kafka:3.9.0
-    depends_on: [kafka]
+    depends_on:
+      kafka: { condition: service_healthy }
     entrypoint: ["/bin/sh", "/scripts/create-topics.sh"]
     volumes: ["./infra/kafka/create-topics.sh:/scripts/create-topics.sh:ro"]
     restart: "no"
 
   jobmanager:
     <<: *core
-    image: flink:2.0-java17          # verify tag + matching Kafka SQL connector JAR in M1
+    build: { context: ., dockerfile: docker/flink.Dockerfile }   # flink:2.0 + Kafka SQL connector 4.0.1-2.0
+    image: fraud/flink:local
     command: jobmanager
+    environment: { JOB_MANAGER_RPC_ADDRESS: jobmanager }
     ports: ["8081:8081"]
-    volumes: ["./flink/conf/config.yaml:/opt/flink/conf/config.yaml:ro", "flink-ckpt:/flink-checkpoints"]
-    mem_limit: 650m
+    volumes: ["flink-ckpt:/flink-checkpoints"]
+    mem_limit: 850m
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8081'"]
+      interval: 5s
+      retries: 20
 
   taskmanager:
     <<: *core
-    image: flink:2.0-java17
+    image: fraud/flink:local
     command: taskmanager
-    depends_on: [jobmanager]
-    volumes: ["./flink/conf/config.yaml:/opt/flink/conf/config.yaml:ro", "flink-ckpt:/flink-checkpoints"]
+    environment: { JOB_MANAGER_RPC_ADDRESS: jobmanager }
+    depends_on:
+      jobmanager: { condition: service_healthy }
+    volumes: ["flink-ckpt:/flink-checkpoints"]
     mem_limit: 1250m
+
+  # One-shot: submits the SQL job to the session cluster, then exits.
+  flink-job:
+    <<: *core
+    image: fraud/flink:local
+    depends_on:
+      jobmanager: { condition: service_healthy }
+      taskmanager: { condition: service_started }
+      kafka-init: { condition: service_completed_successfully }
+    command: ["/opt/flink/submit-job.sh"]
+    restart: "no"
+    mem_limit: 500m
 
   redis:
     <<: *core
@@ -88,8 +114,33 @@ services:
     extra_hosts: ["host.docker.internal:host-gateway"]
     mem_limit: 700m   # semantic cache + guardrails ONNX models (P0 v2)
 
-  # App services (generator, scorer, api, feature_writer, auditor, explainer, latency) are added
-  # milestone by milestone (PLAN.md §11) from a single image: docker/app.Dockerfile.
+  # App services (PLAN.md §11), added milestone by milestone from one image: docker/app.Dockerfile.
+  scorer:
+    <<: *core
+    build: { context: ., dockerfile: docker/app.Dockerfile }
+    image: fraud/app:local
+    command: ["scorer"]
+    environment: { BOOTSTRAP: "kafka:29092", CONFIG_DIR: /app/config }
+    volumes: ["./config:/app/config:ro"]
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    mem_limit: 250m
+
+  # Run-to-completion tools: docker compose --profile tools run --rm generator --rate 2000 --duration 30
+  generator:
+    profiles: ["tools"]
+    image: fraud/app:local
+    entrypoint: ["generator"]
+    environment: { BOOTSTRAP: "kafka:29092" }
+    mem_limit: 400m
+
+  latency:
+    profiles: ["tools"]
+    image: fraud/app:local
+    entrypoint: ["latency"]
+    environment: { BOOTSTRAP: "kafka:29092" }
+    mem_limit: 200m
 
 volumes:
   flink-ckpt: {}

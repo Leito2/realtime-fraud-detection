@@ -32,3 +32,17 @@ def vectorize(row: dict) -> list[float]:
     if any(math.isnan(v) for v in values):
         raise ValueError("NaN feature value")
     return values
+
+
+def build_row(event, profile: dict) -> dict:
+    """Merge an enriched event (dict or pydantic model) with a profile into one feature row.
+
+    Unknown users get ``PROFILE_DEFAULTS``; training must build rows through this same function.
+    """
+    e = event if isinstance(event, dict) else event.model_dump()
+    prof = {**PROFILE_DEFAULTS, **{k: v for k, v in profile.items() if v is not None}}
+    row = {"amount": e["amount"]}
+    row.update({f: e[f] for f in VELOCITY})
+    row.update({f: prof[f] for f in PROFILE})
+    row.update(derived(e["amount"], e["country"], e["ip_country"], prof))
+    return row

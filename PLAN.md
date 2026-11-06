@@ -747,6 +747,22 @@ Cada perfil se levanta solo, con `make down` entre perfiles. Todos los contenedo
 | kafka-exporter + redis_exporter | | 60 MB |
 | **Total** | | **≈ 4.1 GB** ✅ (~0.2 GB de margen) |
 
+**Medido en M1** (`make smoke`, `docker stats` a mitad de carga, Flink 2.0.2, Kafka 3.9.0; datos en `docs/results/docker-stats-*.txt`). Reemplaza las estimaciones de la tabla anterior:
+| Servicio | Estimado | Medido (2k ev/s) | Límite actual |
+|---|---|---|---|
+| Kafka | 850 MB | ~590–600 MiB (CPU ~100–200%) | 850 MB |
+| Flink JobManager | 600m de proceso | ~440 MiB; **600m dio `OutOfMemoryError` al enviar el job SQL**, se subió a 750m | 850 MB |
+| Flink TaskManager | 1200m | ~470–490 MiB (CPU 85–155%) | 1.25 GB |
+| Scorer (1 proceso) | 200 MB | ~39 MiB (CPU ~25%) | 250 MB |
+| Generador (1 proceso) | 100 MB | ~100–140 MiB (1 núcleo: la espera activa lo satura) | 400 MB |
+| Latency Collector | 150 MB | ~18 MiB | 200 MB |
+| Redis | 200 MB | ~6 MiB (aún sin datos) | 200 MB |
+| Prometheus | 350 MB | ~41 MiB | 350 MB |
+| `flink-job` (one-shot, sql-client) | no estimado | ~500 MB mientras corre, luego sale | 500 MB |
+| **Total en reposo / bajo carga** | ≈ 4.1 GB | **≈ 1.7 GB / ≈ 1.8 GB** | — |
+
+El presupuesto real de RAM sobra; el límite de este laptop es la **CPU** (6 núcleos de la VM: Kafka + TaskManager + generador suman ~5 núcleos a 2k ev/s).
+
 **`ops`: demos, shadow, drift y dashboards (E8, §4.10–4.11)**
 Se baja la carga: **1 generador y 1 scorer** (−0.3 GB), y se suman feature writer (100 MB), auditor (100 MB), Postgres (250 MB, `shared_buffers=128MB`), API (150 MB), shadow scorer (200 MB) y Grafana (150 MB). **Total ≈ 4.75 GB** 🟡: entra subiendo `memory=5.5GB` en `.wslconfig` y con el navegador abierto solo en Grafana. Es para **demostrar**, no para medir throughput.
 
@@ -1127,6 +1143,7 @@ M0 → M1 → M2 ──► M3 → M4 (🎯 primera cifra del CV)
 | Punto de decisión | Cuándo | Qué se decide |
 |---|---|---|
 | **D1** | Final de M1 | ¿Kafka o Redpanda? Según la RAM real medida con `docker stats` |
+| ✅ D1 resuelto (2026-11-06) | M1 | **Kafka.** Medido: ~600 MiB de RAM (el presupuesto sobra); lo que escasea es la CPU (Kafka 100–200%). Se re-evalúa Redpanda en M4 solo si E1 señala a Kafka como cuello de botella |
 | **D2** | Mitad de M2 | Spike S1: features con opción A o B |
 | **D3** | Final de M4 | ¿Python alcanza o el scorer o generador pasan a Go? Según el cuello de botella de E1 |
 | **D4** | Final de M4 | ¿Se ajustan las metas? Con la cifra real, se define la frase honesta del CV |

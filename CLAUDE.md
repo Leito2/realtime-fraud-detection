@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Streaming fraud-scoring platform (Kafka → Flink SQL → Redis → XGBoost/ONNX → decisions), measured end to end with open-loop load and percentiles. **Only milestone M0 (bootstrap) plus the gRPC contract exists.** Most of the tree is `.gitkeep` placeholders (`services/*`, `flink/`, `bench/`, `chaos/`, `training/`, `infra/{mlflow,toxiproxy,triton}`); real code today is the `fraudcore` package, `proto/`, `scripts/doctor.py`, and the Compose/config skeleton. `docker-compose.yml` has infra only — app services are added per milestone from a single image (`docker/app.Dockerfile`).
+Streaming fraud-scoring platform (Kafka → Flink SQL → Redis → XGBoost/ONNX → decisions), measured end to end with open-loop load and percentiles. **Milestones M0 and M1 are done** (walking skeleton: generator → Kafka → Flink SQL → scorer → decisions → latency collector, measured by `make smoke`). Later milestones are still `.gitkeep` placeholders (`bench/`, `chaos/`, `training/`, `infra/{mlflow,toxiproxy,triton}`, other `services/*`). App services are added per milestone from a single image (`docker/app.Dockerfile`); every service that gets code is added by explicit path to `[tool.uv.workspace].members` in the root `pyproject.toml`. Confirmed design decisions: PLAN.md §15.
 
 `PLAN.md` (Spanish, ~1280 lines) is the source of truth for design, milestones (§11), risks and experiments; code comments cite it as `PLAN.md §x.y` / `ADR-n`. `README.md` is a progressive skeleton (theory first, technical detail last) that grows with each milestone — each milestone must write its README sections. Per ADR-0001, `PLAN.md`'s ADR summaries become `docs/adr/NNNN-*.md` when their milestone is implemented.
 
@@ -21,6 +21,8 @@ uv run ruff format .                # make fmt
 python scripts/doctor.py            # make doctor — stdlib-only prerequisite check (Docker, uv, RAM, WSL limit, ports, disk)
 make up PROFILE=core                # docker compose --profile core up -d; PROFILE = core|ops|explain|chaos
 make down                           # tears down all profiles
+make smoke                          # end-to-end load test, prints p50/p95/p99 (needs Docker; RATE=500 for lighter)
+uv run lint-imports --config services/scorer/pyproject.toml   # ADR-0002 dependency rule (also in make lint and CI)
 ```
 
 `make smoke|train|bench|chaos|promote` are stubs that exit 1 until later milestones. Ruff: line length 110, rules `E,F,I,UP,B`. CI (`.github/workflows/ci.yml`) is just lint + pytest; `buf lint` / `buf breaking` are planned for the gRPC milestone (M7c) per `buf.yaml`.

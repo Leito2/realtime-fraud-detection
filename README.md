@@ -46,6 +46,15 @@ definitions, event contracts, thresholds). Training and serving import the same 
 train/serve skew is prevented by construction. Full reasoning:
 [ADR-0002](docs/adr/0002-code-organization-clean-architecture.md).
 
+#### The pipeline today (M1)
+```
+generator ──payments──► Flink SQL (10-min OVER window) ──payments-enriched──► scorer ──decisions──► latency collector
+ open-loop      key=user_id     one row per payment, current one included      micro-batches         percentiles
+```
+A payment is scheduled at a fixed time (`t_scheduled_ns`), whatever the system is doing. Latency is the
+broker timestamp of its decision minus that scheduled time, so a slow system cannot hide its own delay
+(*coordinated omission*). The scorer is a placeholder rule for now; the real model arrives in M3.
+
 ### 5. Design Decisions (ADRs)
 ### 6. The Journey of a Payment
 
@@ -62,8 +71,18 @@ Recommended `%UserProfile%\.wslconfig`: `[wsl2] memory=5GB processors=6 swap=2GB
 python scripts/doctor.py        # prerequisites
 uv sync --all-packages --dev    # or: make setup
 uv run pytest -q                # M0: contracts + feature definitions
-make up PROFILE=core            # Kafka, Flink, Redis, Prometheus
+make up PROFILE=core            # Kafka, Flink, Redis, Prometheus, scorer
+make smoke                      # end-to-end load test: prints p50/p95/p99   (RATE=500 make smoke for a lighter run)
 ```
+
+First measurement (M1, 8 GB laptop, placeholder rule scorer; raw files in `docs/results/`):
+
+| Load | p50 | p95 | p99 | Lost | Note |
+|---|---|---|---|---|---|
+| 500 ev/s | 16 ms | 96 ms | 487 ms | 0 | |
+| 2 000 ev/s | 1 065 ms | 2 439 ms | 2 931 ms | 0 | saturated: queues build up (CPU-bound, see PLAN §8) |
+
+The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 
 ## Part VI — Reflection (lessons, limitations, future work, glossary)
 

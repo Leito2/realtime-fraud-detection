@@ -17,5 +17,7 @@ jobs:
         run: uv sync --all-packages --dev
       - name: Lint
         run: uv run ruff check .
+      - name: Dependency rule (Clean Architecture)
+        run: uv run lint-imports --config services/scorer/pyproject.toml
       - name: Test
         run: uv run pytest -q
