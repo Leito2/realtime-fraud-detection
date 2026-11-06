@@ -75,7 +75,8 @@ def recorded_names() -> set[str]:
 def test_dashboards_cover_the_questions_of_the_plan():
     titles = {json.loads(p.read_text(encoding="utf-8"))["title"]
               for p in (OBS / "grafana" / "dashboards").glob("*.json")}
-    assert {"D1 Overview", "D2 Latency Breakdown", "D3 Kafka & Flink", "D4 Model & Business"} <= titles
+    assert {"D1 Overview", "D2 Latency Breakdown", "D3 Kafka & Flink", "D4 Model & Business",
+            "D5 Explanations"} <= titles
 
 
 def test_dashboard_uids_are_unique_and_use_the_provisioned_datasource():

@@ -10,7 +10,7 @@ dependencies = ["fraudcore"]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*", "services/generator", "services/scorer", "services/latency", "services/profile_builder", "services/feature_writer", "services/auditor", "training", "bench", "backtest"]
+members = ["packages/*", "services/generator", "services/scorer", "services/latency", "services/profile_builder", "services/feature_writer", "services/auditor", "services/explainer", "services/api", "training", "bench", "backtest"]
 
 [tool.uv.sources]
 fraudcore = { workspace = true }

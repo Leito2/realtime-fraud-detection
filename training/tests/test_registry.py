@@ -28,3 +28,13 @@ def test_register_sets_alias_and_stores_model_features_thresholds(tmp_path):
     assert run.data.metrics["pr_auc"] == 0.8 and run.data.metrics["nested.x"] == 1.5
     assert json.loads((Path(local) / "features.json").read_text()) == FEATURE_ORDER
     assert json.loads((Path(local) / "thresholds.json").read_text()) == {"review": 0.3}
+
+
+def test_extra_binary_files_are_stored_next_to_the_model(tmp_path):
+    uri = f"sqlite:///{(tmp_path / 'mlflow.db').as_posix()}"
+    register_model(tracking_uri=uri, artifact_root=(tmp_path / "artifacts").as_uri(), experiment="t",
+                   model_name="fraud", alias="champion", onnx_bytes=b"onnx", features=FEATURE_ORDER,
+                   params={}, metrics={}, files={"booster.json": b'{"native": true}'})
+    mv = mlflow.MlflowClient(tracking_uri=uri).get_model_version_by_alias("fraud", "champion")
+    local = mlflow.artifacts.download_artifacts(artifact_uri=mv.source, dst_path=str(tmp_path / "dl"))
+    assert (Path(local) / "booster.json").read_bytes() == b'{"native": true}'

@@ -131,13 +131,21 @@ def run(s: Settings) -> dict:
                        "score_reference.json": reference_from_scores(valid_scores[champion]),
                        "eval.json": results},
             tags={"dataset_digest": manifest["digest"], "model_kind": champion},
-            run_name=f"{champion}-champion")
+            run_name=f"{champion}-champion",
+            files=_native_files(champion, fitted[champion]))
         results["registry"] = {"model": MODEL_NAME, "alias": s.alias, "version": version}
         _write_thresholds(s.thresholds_out, f"{MODEL_NAME}-v{version}", thresholds)
 
     s.results_out.parent.mkdir(parents=True, exist_ok=True)
     s.results_out.write_text(json.dumps(results, indent=2, default=float), encoding="utf-8")
     return results
+
+
+def _native_files(kind: str, model) -> dict[str, bytes]:
+    """The native booster travels with the ONNX twin: SHAP needs it and the ONNX graph cannot provide it."""
+    if kind != "xgboost":
+        return {}
+    return {"booster.json": bytes(model.get_booster().save_raw(raw_format="json"))}
 
 
 def _write_thresholds(path: Path, name: str, th: dict) -> None:

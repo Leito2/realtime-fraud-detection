@@ -14,3 +14,5 @@ scrape_configs:
     static_configs: [{ targets: ["scorer:9100"] }]
   - job_name: scorer-shadow
     static_configs: [{ targets: ["scorer-shadow:9101"] }]
+  - job_name: explainer
+    static_configs: [{ targets: ["explainer:9102"] }]

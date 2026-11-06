@@ -39,3 +39,4 @@ Thumbs.db
 
 # local data (simulated history, results scratch)
 data/
+docs/results/*.html

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 PROFILE ?= core
-.PHONY: help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train train-challenger promote history trace-up shadow
+.PHONY: datalake backtest drift-report drift-demo help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train train-challenger promote history trace-up shadow
 
 help:      ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
@@ -21,6 +21,7 @@ test:      ## Unit + contract tests
 lint:      ## Lint + dependency rule (ADR-0002)
 	uv run ruff check .
 	uv run lint-imports --config services/scorer/pyproject.toml
+	uv run lint-imports --config services/explainer/pyproject.toml
 fmt:       ## Format
 	uv run ruff format .
 trace-up:  ## Core + ops + tracing (OTel Collector, Tempo); the scorer then exports 1% traces
@@ -42,6 +43,14 @@ promote:   ## Move the champion alias to MODEL (default challenger) if config/pr
 	uv run promote --source $(or $(MODEL),challenger) $(if $(FORCE),--force,)
 shadow:    ## Labelled traffic in the regime the models were trained on, for the champion-vs-challenger views (RATE=20 DURATION=300)
 	docker compose --profile tools run --rm -T generator --rate $(or $(RATE),20) --duration $(or $(DURATION),300) --users 20000 --zipf 0 --scenarios
+datalake:  ## Publish data/history_full.parquet to MinIO as a new object version (with SHA-256 manifest)
+	uv run backtest publish data/history_full.parquet
+backtest:  ## Champion vs challenger on the versioned dataset in MinIO -> docs/results/m6b-backtest.md
+	uv run backtest run $(BACKTEST_ARGS)
+drift-report:  ## Evidently: training features vs the ones the scorer served (start it with LOG_FEATURES=1)
+	uv run backtest drift $(DRIFT_ARGS)
+drift-demo:  ## The whole online MLOps loop: new fraud pattern, retrain, shadow, promote, recovery (~25 min)
+	uv run python scripts/drift_demo.py $(DEMO_ARGS)
 bench:     ## Load protocol E1 (rate steps x3, p95/p99, sustained throughput); BENCH_ARGS to override
 	uv run python -m fraud_bench.run e1 $(BENCH_ARGS)
 chaos:     ## Implemented in a later milestone (PLAN.md §11)

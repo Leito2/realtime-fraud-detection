@@ -1,0 +1,12 @@
+kafka: { bootstrap: "kafka:29092", input_topic: decisions, output_topic: explanations, group: explainer }
+mlflow: { tracking_uri: "http://mlflow:5000", model_name: fraud-champion }
+policy:
+  max_inflight: 2          # LLM calls in flight; more cases than this are shed (status skipped), never queued
+  max_age_s: 30            # a decision older than this is not worth explaining any more
+breaker: { failures: 3, cooldown_s: 20 }
+llm:
+  provider: mock           # mock | ollama | gateway ; LLM_PROVIDER overrides. $0 only (PLAN.md 11.2)
+  base_url: "http://host.docker.internal:11434/v1"
+  model: "qwen2.5:0.5b"
+  timeout_s: 20
+metrics_port: 9102

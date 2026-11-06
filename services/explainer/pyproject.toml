@@ -1,0 +1,43 @@
+[project]
+name = "explainer"
+version = "0.1.0"
+description = "Explainer: SHAP says why, an LLM words it (PLAN.md 3.10). Clean Architecture service (ADR-0002)."
+requires-python = ">=3.12"
+dependencies = ["fraudcore", "confluent-kafka>=2.5", "numpy>=1.26", "pyyaml>=6", "xgboost>=2.1",
+    "mlflow-skinny>=3.0", "prometheus-client>=0.20", "httpx>=0.27", "psycopg[binary]>=3.2"]
+
+[project.scripts]
+explainer = "explainer.main:main"
+explainer-audit = "explainer.audit_main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/explainer"]
+
+[tool.uv.sources]
+fraudcore = { workspace = true }
+
+# Dependency rule (ADR-0002): imports only point inward. Run: uv run lint-imports --config services/explainer/pyproject.toml
+[tool.importlinter]
+root_package = "explainer"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Clean Architecture layers"
+type = "layers"
+layers = [
+    "explainer.main | explainer.audit_main",
+    "explainer.config",
+    "explainer.entrypoints | explainer.adapters",
+    "explainer.application",
+    "explainer.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Core knows no infrastructure"
+type = "forbidden"
+source_modules = ["explainer.application", "explainer.domain"]
+forbidden_modules = ["xgboost", "confluent_kafka", "mlflow", "prometheus_client", "httpx", "yaml", "fraudinfra", "psycopg"]

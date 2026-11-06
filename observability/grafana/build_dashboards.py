@@ -193,9 +193,34 @@ def model_business() -> Board:
     return b
 
 
+EXPLAINED = """
+SELECT date_trunc('minute', created_at) AS time, status, count(*) AS n
+FROM explanations WHERE $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1
+"""
+
+
+def explanations() -> Board:
+    b = Board("fraud-explanations", "D5 Explanations")
+    b.stat("Explained / s", "sum(rate(explanations_total[1m]))", "ops")
+    total = "clamp_min(sum(rate(explanations_total[5m])), 1e-9)"
+    b.stat("Skipped (shed) share", f'sum(rate(explanations_total{{status="skipped"}}[5m])) / {total}',
+           "percentunit")
+    b.stat("LLM texts rejected as unfaithful",
+           f"sum(rate(explanations_rejected_total[5m])) / {total}", "percentunit")
+    b.stat("In flight", "explainer_inflight")
+    b.series("Explanations by status",
+             [("sum by (status) (rate(explanations_total[1m]))", "{{status}}")], "ops")
+    b.series("LLM latency", [(q("explainer_llm_latency_seconds", 0.5), "p50"),
+                             (q("explainer_llm_latency_seconds", 0.95), "p95")], "s")
+    b.series("Time to explain one decision", [(q("explainer_seconds", 0.95), "p95")], "s")
+    b.series("Explainer lag (messages)", [('sum(kafka_consumergroup_lag{consumergroup="explainer"})', "lag")])
+    b.sql("Stored explanations by status (per minute)", EXPLAINED)
+    return b
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    for board in (overview(), latency(), streaming(), model_business()):
+    for board in (overview(), latency(), streaming(), model_business(), explanations()):
         (OUT / f"{board.uid}.json").write_text(json.dumps(board.build(), indent=2) + "\n", encoding="utf-8")
         print("wrote", board.uid)
 

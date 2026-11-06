@@ -140,6 +140,16 @@ services:
     ports: ["5432:5432"]
     mem_limit: 250m
 
+  # S3-compatible object store with versioning (the data lake). PLAN.md named MinIO; MinIO stopped publishing
+  # images and binaries in 2025, so this is SeaweedFS behind the same S3 API (PLAN.md 16, H10).
+  s3:
+    profiles: ["ops"]
+    image: chrislusf/seaweedfs:latest
+    command: ["server", "-s3", "-s3.config=/etc/s3.json", "-dir=/data", "-volume.max=8", "-master.volumeSizeLimitMB=256"]
+    volumes: ["./infra/s3/s3.json:/etc/s3.json:ro", "s3-data:/data"]
+    ports: ["8333:8333"]
+    mem_limit: 300m
+
   grafana:
     profiles: ["ops", "explain"]
     image: grafana/grafana:11.6.0
@@ -220,6 +230,26 @@ services:
     restart: unless-stopped
     mem_limit: 150m
 
+  # Async path (PLAN.md 3.10): reads flagged decisions, may be slow or down without touching decisions.
+  # Needs the scorer to log features for flagged decisions: LOG_FEATURES=flagged on the scorer service.
+  explainer:
+    profiles: ["explain", "ops"]
+    image: fraud/app:local
+    entrypoint: ["explainer"]
+    environment:
+      BOOTSTRAP: "kafka:29092"
+      CONFIG_DIR: /app/config
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      LLM_PROVIDER: "${LLM_PROVIDER:-mock}"
+      LLM_BASE_URL: "${LLM_BASE_URL:-http://host.docker.internal:11434/v1}"
+      LLM_MODEL: "${LLM_MODEL:-qwen2.5:0.5b}"
+    volumes: ["./config:/app/config:ro"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    mem_limit: 300m
+
   # Run-to-completion tools: docker compose --profile tools run --rm generator --rate 2000 --duration 30
   generator:
     profiles: ["tools"]
@@ -237,6 +267,20 @@ services:
     volumes: ["./data:/data:ro"]
     mem_limit: 1g
 
+  # On-demand job (M6b): docker compose --profile tools run --rm backtest run
+  backtest:
+    profiles: ["tools"]
+    build: { context: ., dockerfile: docker/backtest.Dockerfile }
+    image: fraud/backtest:local
+    environment:
+      S3_ENDPOINT: "http://s3:8333"
+      S3_ACCESS_KEY: fraud
+      S3_SECRET_KEY: fraudfraud
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      POSTGRES_DSN: "postgresql://fraud:fraud@postgres:5432/fraud"
+    volumes: ["./docs/results:/app/docs/results"]
+    mem_limit: 1500m
+
   latency:
     profiles: ["tools"]
     image: fraud/app:local
@@ -250,3 +294,4 @@ volumes:
   tempo-data: {}
   model-cache: {}
   model-cache-shadow: {}
+  s3-data: {}

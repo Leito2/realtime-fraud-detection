@@ -94,3 +94,19 @@ def test_the_models_score_reference_is_forwarded_to_the_metrics():
     uc.model, uc.metrics = WithReference([0.1]), RecordingMetrics()
     uc([event("a")])
     assert uc.metrics.batches[0].score_reference == ref
+
+
+def test_flagged_mode_logs_features_only_for_decisions_that_need_an_explanation():
+    uc, *_ = build([0.1, 0.5, 0.9])
+    uc.log_features = "flagged"
+    out = uc([event("a"), event("b", "u_2"), event("c", "u_3")])
+    assert [d.decision for d in out] == ["APPROVE", "REVIEW", "BLOCK"]
+    assert [d.features is not None for d in out] == [False, True, True]
+
+
+def test_boolean_flag_values_keep_working():
+    uc, *_ = build([0.1])
+    uc.log_features = True
+    assert uc([event("a")])[0].features is not None
+    uc.log_features = False
+    assert uc([event("a")])[0].features is None

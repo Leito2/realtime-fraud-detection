@@ -20,7 +20,7 @@ from fraud_training.dataset import build_dataset, temporal_split
 from fraud_training.metrics import pr_auc, recall_at_fpr
 from fraud_training.models import OnnxScorer, check_parity, fit_model, native_scores, to_onnx
 from fraud_training.registry import register_model
-from fraud_training.train import MODEL_NAME, Settings, _arrays, file_digest
+from fraud_training.train import MODEL_NAME, Settings, _arrays, _native_files, file_digest
 from fraudcore.drift import reference_from_scores
 from fraudcore.features import FEATURE_ORDER, vectorize
 
@@ -79,7 +79,7 @@ def retrain(s: Settings, rows, *, min_fraud: int = 30, use_history: bool = True,
             artifacts={"thresholds.json": thresholds, "score_reference.json": reference_from_scores(onnx)},
             tags={"source": source, "feedback_rows": len(y), "feedback_fraud": int(y.sum()),
                   "model_kind": kind, **({"dataset_digest": digest} if digest else {})},
-            run_name=f"{kind}-retrain")
+            run_name=f"{kind}-retrain", files=_native_files(kind, model))
         result["registry"] = {"model": MODEL_NAME, "alias": alias, "version": version}
     return result
 

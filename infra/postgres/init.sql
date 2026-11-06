@@ -26,8 +26,10 @@ CREATE TABLE IF NOT EXISTS explanations (
   payment_id TEXT PRIMARY KEY,
   status     TEXT NOT NULL CHECK (status IN ('llm','template','skipped')),
   text       TEXT,
-  top_features JSONB
+  top_features JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE explanations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE OR REPLACE VIEW v_confusion_by_model AS
 SELECT 'champion' AS model, d.decision <> 'APPROVE' AS flagged, l.is_fraud, COUNT(*) AS n
