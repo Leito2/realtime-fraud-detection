@@ -16,3 +16,7 @@ scrape_configs:
     static_configs: [{ targets: ["scorer-shadow:9101"] }]
   - job_name: explainer
     static_configs: [{ targets: ["explainer:9102"] }]
+  - job_name: scoring-grpc
+    static_configs: [{ targets: ["scoring-grpc:9103"] }]
+  - job_name: api
+    static_configs: [{ targets: ["api:9104"] }]

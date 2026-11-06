@@ -82,3 +82,25 @@ class NullTracer:
 class NullMetrics:
     def observe_batch(self, stats: BatchStats) -> None:
         pass
+
+
+class VelocityStore(Protocol):
+    """Last velocity window state per user (``None`` for an unknown user), as the Feature Writer left it."""
+
+    def get_many(self, user_ids: Sequence[str]) -> list[dict | None]: ...
+
+
+@dataclass(frozen=True)
+class StoredDecision:
+    """A decision as the audit store remembers it (what GetDecision returns)."""
+
+    payment_id: str
+    decision: str
+    score: float
+    model_version: str
+    threshold_set: str
+    degraded: bool
+
+
+class DecisionLookup(Protocol):
+    def get(self, payment_id: str) -> StoredDecision | None: ...

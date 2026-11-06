@@ -9,4 +9,4 @@ COPY packages ./packages
 COPY services ./services
 COPY training/pyproject.toml ./training/pyproject.toml
 RUN uv sync --frozen --no-dev --package scorer --package generator --package latency \
-    --package profile_builder --package feature_writer --package auditor --package explainer
+    --package profile_builder --package feature_writer --package auditor --package explainer --package api --package fraud-bench

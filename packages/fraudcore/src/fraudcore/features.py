@@ -73,3 +73,21 @@ def velocity_reference(events) -> list[dict]:
             "f_small_tx_cnt_10m": sum(1 for a in amounts if a < SMALL_TX_AMOUNT),
         })
     return out
+
+
+def sync_velocity(snapshot: dict | None, amount: float, now_ts: float) -> dict:
+    """Velocity for a payment scored synchronously (PLAN.md 14.2), from the Feature Writer's last state.
+
+    The OVER window includes the current row (ADR-3), so the payment is added to the stored state. A state
+    older than ``WINDOW_S`` is an empty window. The stored state still holds events that may have just left
+    the window, so this approximates Flink at the window edge; the gap is measured, not assumed.
+    """
+    live = snapshot is not None and now_ts - float(snapshot["ts"]) <= WINDOW_S
+    cnt = int(snapshot["f_cnt_10m"]) if live else 0
+    return {
+        "f_cnt_10m": cnt + 1,
+        "f_sum_10m": (float(snapshot["f_sum_10m"]) if live else 0.0) + amount,
+        "f_max_10m": max(float(snapshot["f_max_10m"]), amount) if live else amount,
+        "f_small_tx_cnt_10m": (int(snapshot["f_small_tx_cnt_10m"]) if live else 0)
+        + (1 if amount < SMALL_TX_AMOUNT else 0),
+    }

@@ -3,7 +3,7 @@ name = "fraud-bench"
 version = "0.1.0"
 description = "Open-loop load protocol, run manifests and result reports (PLAN.md section 5)."
 requires-python = ">=3.12"
-dependencies = ["confluent-kafka>=2.5", "pyyaml>=6"]
+dependencies = ["confluent-kafka>=2.5", "pyyaml>=6", "fraudproto", "generator", "httpx>=0.27"]
 
 [project.scripts]
 bench = "fraud_bench.run:main"
@@ -15,3 +15,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fraud_bench"]
+
+[tool.uv.sources]
+fraudproto = { workspace = true }
+generator = { workspace = true }

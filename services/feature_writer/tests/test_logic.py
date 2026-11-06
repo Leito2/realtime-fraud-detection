@@ -21,4 +21,9 @@ def test_last_event_per_user_wins_inside_a_batch():
 def test_hash_has_every_velocity_feature_as_strings():
     out = latest_per_user([event("p1", "a", 3, 15.0)])[velocity_key("a")]
     assert out == {"f_cnt_10m": "3", "f_sum_10m": "15.0", "f_max_10m": "5.0", "f_small_tx_cnt_10m": "1",
-                   "payment_id": "p1"}
+                   "payment_id": "p1", "ts": str(event("p1", "a", 3, 15.0).event_time.timestamp())}
+
+
+def test_the_hash_carries_the_event_time_so_a_reader_can_age_the_window():
+    out = latest_per_user([event("p1", "a", 1, 5.0)])[velocity_key("a")]
+    assert float(out["ts"]) == 1791209002.123

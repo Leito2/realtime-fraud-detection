@@ -28,6 +28,13 @@ class Settings:
     model_cache_dir: Path | None
     metrics_port: int
     log_features: bool | str
+    grpc_port: int
+    grpc_stream_max: int
+    grpc_stream_wait_s: float
+    grpc_workers: int
+    grpc_metrics_port: int
+    grpc_api_key: str | None
+    postgres_dsn: str | None
     thresholds: Thresholds
     policy: DegradedPolicy
 
@@ -47,6 +54,7 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
     th = yaml.safe_load((d / "thresholds.yaml").read_text(encoding="utf-8"))
     kafka = scorer["kafka"]
     shadow = mode == "shadow"
+    grpc = scorer["grpc"]
     deg = th["degraded"]
     return Settings(
         bootstrap=os.environ.get("BOOTSTRAP", kafka["bootstrap"]),
@@ -64,6 +72,13 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
         poll_s=float(scorer["model"]["poll_seconds"]),
         onnx_threads=int(scorer["onnx"]["intra_op_num_threads"]),
         log_features=_log_features(scorer.get("log_features", False)),
+        grpc_port=int(os.environ.get("GRPC_PORT", grpc["port"])),
+        grpc_stream_max=int(grpc["stream_max_messages"]),
+        grpc_stream_wait_s=float(grpc["stream_max_wait_ms"]) / 1000,
+        grpc_workers=int(grpc["workers"]),
+        grpc_metrics_port=int(os.environ.get("GRPC_METRICS_PORT", grpc["metrics_port"])),
+        grpc_api_key=os.environ.get("GRPC_API_KEY") or None,
+        postgres_dsn=os.environ.get("POSTGRES_DSN") or None,
         metrics_port=int(os.environ.get("METRICS_PORT", 9101 if shadow else 9100)),
         model_cache_dir=Path(os.environ["MODEL_CACHE_DIR"]) if os.environ.get("MODEL_CACHE_DIR") else None,
         thresholds=Thresholds(th["threshold_set"], th["review"], th["block"]),

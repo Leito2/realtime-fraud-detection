@@ -26,3 +26,13 @@ def test_empty_overrides_are_ignored(monkeypatch):
     monkeypatch.setenv("BATCH_MAX_MESSAGES", "")
     monkeypatch.setenv("BATCH_MAX_WAIT_MS", "")
     assert config.load(CONFIG_DIR).max_messages == 500
+
+
+def test_grpc_settings_come_from_the_yaml_and_the_environment(monkeypatch):
+    monkeypatch.delenv("GRPC_PORT", raising=False)
+    monkeypatch.delenv("GRPC_API_KEY", raising=False)
+    cfg = config.load(CONFIG_DIR)
+    assert (cfg.grpc_port, cfg.grpc_stream_max, cfg.grpc_stream_wait_s) == (50051, 32, 0.005)
+    assert cfg.grpc_api_key is None
+    monkeypatch.setenv("GRPC_API_KEY", "k")
+    assert config.load(CONFIG_DIR).grpc_api_key == "k"

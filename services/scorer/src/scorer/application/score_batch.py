@@ -35,11 +35,14 @@ class ScoreBatch:
     tracer: Tracer = field(default_factory=NullTracer)
     log_features: bool | str = False         # False | True/"all" | "flagged" (only REVIEW and BLOCK)
 
-    def __call__(self, events: list[EnrichedPayment]) -> list[DecisionEvent]:
+    def __call__(self, events: list[EnrichedPayment], force_degraded: bool = False) -> list[DecisionEvent]:
+        """``force_degraded``: the caller already knows features are incomplete (sync path, PLAN.md 14)."""
         if not events:
             return []
         t0 = self.clock.now_ns()
         try:
+            if force_degraded:
+                raise ProfileUnavailable("degraded by the caller")
             profiles, degraded = self.profiles.get_many([e.user_id for e in events]), False
         except ProfileUnavailable:
             profiles, degraded = [dict(PROFILE_DEFAULTS) for _ in events], True
