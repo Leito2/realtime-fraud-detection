@@ -1,5 +1,6 @@
 """Composition root: the only module that knows every concrete class (ADR-0002)."""
 import argparse
+import logging
 import signal
 import threading
 
@@ -7,7 +8,11 @@ import redis
 from confluent_kafka import Consumer, Producer
 
 from scorer import config
+from scorer.adapters.hot_swap import HotSwapModel
 from scorer.adapters.kafka_decisions import KafkaDecisionSink
+from scorer.adapters.mlflow_registry import MlflowRegistry
+from scorer.adapters.otel_tracer import from_env as tracer_from_env
+from scorer.adapters.prometheus_metrics import serve as serve_metrics
 from scorer.adapters.redis_profiles import RedisProfileStore
 from scorer.adapters.rule_model import RuleModel
 from scorer.adapters.system_clock import SystemClock
@@ -19,6 +24,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Fraud scorer")
     ap.add_argument("--mode", choices=["champion", "shadow"], default="champion")
     args = ap.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     cfg = config.load(mode=args.mode)
 
     producer = Producer({"bootstrap.servers": cfg.bootstrap, "linger.ms": 1, "compression.type": "lz4",
@@ -31,10 +37,17 @@ def main() -> None:
 
     t = cfg.redis_timeout_s
     redis_client = redis.Redis.from_url(cfg.redis_url, socket_timeout=t, socket_connect_timeout=t)
+    # The rule model serves until the registry has a champion; then the poller swaps it in, no restart.
+    registry = MlflowRegistry(cfg.tracking_uri, cfg.model_name, cfg.model_alias, cfg.model_cache_dir)
+    model = HotSwapModel(registry, cfg.model_name, fallback=RuleModel(), poll_s=cfg.poll_s,
+                         intra_op_threads=cfg.onnx_threads)
+    model.start()
+    metrics = serve_metrics(cfg.metrics_port)
     score = ScoreBatch(
-        profiles=RedisProfileStore(redis_client), model=RuleModel(),
+        profiles=RedisProfileStore(redis_client), model=model,
         sink=KafkaDecisionSink(producer, cfg.output_topic),
-        thresholds=cfg.thresholds, policy=cfg.policy, clock=SystemClock())
+        thresholds=cfg.thresholds, policy=cfg.policy, clock=SystemClock(), metrics=metrics,
+        tracer=tracer_from_env(f"scorer-{args.mode}"))
 
     def to_dlq(raw: bytes, why: str) -> None:
         producer.produce(cfg.dlq_topic, value=raw, headers={"error": why})
@@ -46,6 +59,7 @@ def main() -> None:
     try:
         kafka_consumer.run(consumer, to_dlq, score, cfg.max_messages, cfg.max_wait_s, stop)
     finally:
+        model.stop()
         producer.flush(5)
         consumer.close()
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Streaming fraud-scoring platform (Kafka → Flink SQL → Redis → XGBoost/ONNX → decisions), measured end to end with open-loop load and percentiles. **Milestones M0, M1 and M2 are done** (walking skeleton measured by `make smoke`; real-time features: Flink velocity, Redis profiles via the Profile Builder, Feature Writer, and a Flink-vs-`fraudcore` parity test). Later milestones are still `.gitkeep` placeholders (`bench/`, `chaos/`, `training/`, `infra/{mlflow,toxiproxy,triton}`, other `services/*`). App services are added per milestone from a single image (`docker/app.Dockerfile`); every service that gets code is added by explicit path to `[tool.uv.workspace].members` in the root `pyproject.toml`. Confirmed design decisions: PLAN.md §15.
+Streaming fraud-scoring platform (Kafka → Flink SQL → Redis → XGBoost/ONNX → decisions), measured end to end with open-loop load and percentiles. **Milestones M0-M5 are done** (walking skeleton; real-time features with a Flink-vs-`fraudcore` parity test; offline training with rules/XGBoost/LightGBM, cost-based thresholds, ONNX parity gate and MLflow registry with a hot-swapping scorer; the `bench` load protocol; Prometheus/Grafana/alerts and optional tracing). Measured E1/E2/E3 numbers need a quiet machine and are not final until run (see README). Later milestones are still `.gitkeep` placeholders (`bench/`, `chaos/`, `training/`, `infra/{mlflow,toxiproxy,triton}`, other `services/*`). App services are added per milestone from a single image (`docker/app.Dockerfile`); every service that gets code is added by explicit path to `[tool.uv.workspace].members` in the root `pyproject.toml`. Confirmed design decisions: PLAN.md §15.
 
 `PLAN.md` (Spanish, ~1280 lines) is the source of truth for design, milestones (§11), risks and experiments; code comments cite it as `PLAN.md §x.y` / `ADR-n`. `README.md` is a progressive skeleton (theory first, technical detail last) that grows with each milestone — each milestone must write its README sections. Per ADR-0001, `PLAN.md`'s ADR summaries become `docs/adr/NNNN-*.md` when their milestone is implemented.
 
@@ -24,11 +24,16 @@ make down                           # tears down all profiles
 make smoke                          # end-to-end load test, prints p50/p95/p99 (needs Docker; RATE=500 for lighter)
 make profiles                       # simulate history + load user profiles into Redis (stack must be up)
 make parity                         # Flink OVER window vs fraudcore.velocity_reference (stack must be up; skipped otherwise)
+make history                        # simulate 60 days with fraud scenarios -> data/history_full.parquet (600k payments)
+make train                          # rules/XGBoost/LightGBM, ONNX parity gate, register champion in MLflow (needs `make up`); TRAIN_ARGS='--trials 0' for a quick run
+make bench                          # E1 rate steps x3 + manifest + sustained throughput (QUIET MACHINE ONLY); uv run python -m fraud_bench.report docs/results/<run>
+make trace-up                       # core + ops + tracing (OTel Collector, Tempo); Grafana on :3000, MLflow :5000, Prometheus :9090
+uv run python observability/grafana/build_dashboards.py   # regenerate Grafana dashboards from code
 uv run python scripts/e3_buffer_timeout.py   # experiment E3 (Flink buffer-timeout sweep)
 uv run lint-imports --config services/scorer/pyproject.toml   # ADR-0002 dependency rule (also in make lint and CI)
 ```
 
-`make smoke|train|bench|chaos|promote` are stubs that exit 1 until later milestones. Ruff: line length 110, rules `E,F,I,UP,B`. CI (`.github/workflows/ci.yml`) is just lint + pytest; `buf lint` / `buf breaking` are planned for the gRPC milestone (M7c) per `buf.yaml`.
+`make chaos|promote` are stubs that exit 1 until later milestones. Ruff: line length 110, rules `E,F,I,UP,B`. CI (`.github/workflows/ci.yml`) is just lint + pytest; `buf lint` / `buf breaking` are planned for the gRPC milestone (M7c) per `buf.yaml`.
 
 ## Architecture (big picture)
 

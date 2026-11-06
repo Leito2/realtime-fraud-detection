@@ -1,8 +1,8 @@
-# Chosen by expected cost on validation data (PLAN.md §4.6). Placeholder until M3.
-threshold_set: v0-placeholder
-review: 0.30
-block: 0.80
-degraded:            # policy when Redis profiles are unavailable (PLAN.md §7.4)
-  review: 0.20
-  block: 0.70
+# Written by `make train`: chosen by expected cost on validation data (PLAN.md section 4.6).
+threshold_set: fraud-champion-v1
+review: 0.70314
+block: 0.980025
+degraded:
+  review: 0.2
+  block: 0.7
   max_auto_approve_amount: 500

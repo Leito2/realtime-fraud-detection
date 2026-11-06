@@ -1,0 +1,251 @@
+{
+  "champion": "xgboost",
+  "models": {
+    "rules": {
+      "pr_auc": 0.16354170607302956,
+      "recall_at_fpr_1pct": 0.2597701149425287,
+      "recall_by_scenario": {
+        "account_takeover": 0.821917808219178,
+        "atypical_amount": 0.04,
+        "burst": 0.462406015037594,
+        "card_testing": 0.5786666666666667,
+        "geo_jump": 0.06,
+        "slow_fraud": 0.07777777777777778
+      },
+      "pr_auc_unseen_users": 0.32339324618736387,
+      "cost": 255530.18,
+      "review_rate": 0.01291,
+      "block_rate": 0.0925,
+      "review_threshold": 0.5,
+      "block_threshold": 0.6
+    },
+    "xgboost": {
+      "pr_auc": 0.5902273596135568,
+      "recall_at_fpr_1pct": 0.6735632183908046,
+      "recall_by_scenario": {
+        "account_takeover": 1.0,
+        "atypical_amount": 0.56,
+        "burst": 0.6090225563909775,
+        "card_testing": 0.9546666666666667,
+        "geo_jump": 0.32,
+        "slow_fraud": 0.011111111111111112
+      },
+      "pr_auc_unseen_users": 0.5573266685620698,
+      "cost": 38785.14,
+      "review_rate": 0.009,
+      "block_rate": 0.00348,
+      "review_threshold": 0.7031398220057697,
+      "block_threshold": 0.980025274824156
+    },
+    "xgboost_onnx": {
+      "pr_auc": 0.5902273593528599,
+      "recall_at_fpr_1pct": 0.6735632183908046,
+      "recall_by_scenario": {
+        "account_takeover": 1.0,
+        "atypical_amount": 0.56,
+        "burst": 0.6090225563909775,
+        "card_testing": 0.9546666666666667,
+        "geo_jump": 0.32,
+        "slow_fraud": 0.011111111111111112
+      },
+      "pr_auc_unseen_users": 0.5573266685620698,
+      "cost": 38785.14,
+      "review_rate": 0.009,
+      "block_rate": 0.00348,
+      "review_threshold": 0.7031398220057697,
+      "block_threshold": 0.980025274824156
+    },
+    "lightgbm": {
+      "pr_auc": 0.5033739991788437,
+      "recall_at_fpr_1pct": 0.5793103448275863,
+      "recall_by_scenario": {
+        "account_takeover": 0.9452054794520548,
+        "atypical_amount": 0.16,
+        "burst": 0.38345864661654133,
+        "card_testing": 0.928,
+        "geo_jump": 0.28,
+        "slow_fraud": 0.011111111111111112
+      },
+      "pr_auc_unseen_users": 0.4013777534823453,
+      "cost": 44612.5,
+      "review_rate": 0.0175,
+      "block_rate": 0.00198,
+      "review_threshold": 0.6285694627367466,
+      "block_threshold": 0.9956135498016401
+    },
+    "lightgbm_onnx": {
+      "pr_auc": 0.5033675539914212,
+      "recall_at_fpr_1pct": 0.5793103448275863,
+      "recall_by_scenario": {
+        "account_takeover": 0.9452054794520548,
+        "atypical_amount": 0.16,
+        "burst": 0.38345864661654133,
+        "card_testing": 0.928,
+        "geo_jump": 0.28,
+        "slow_fraud": 0.011111111111111112
+      },
+      "pr_auc_unseen_users": 0.4013777534823453,
+      "cost": 44617.5,
+      "review_rate": 0.01751,
+      "block_rate": 0.00198,
+      "review_threshold": 0.6285694389271559,
+      "block_threshold": 0.9956135012964556
+    }
+  },
+  "onnx_max_abs_diff": 8.940696716308594e-08,
+  "onnx_parity": {
+    "xgboost": {
+      "max_abs_diff": 8.940696716308594e-08,
+      "rows_over_tol": 0,
+      "rows": 100000,
+      "ok": true
+    },
+    "lightgbm": {
+      "max_abs_diff": 0.06244361400604248,
+      "rows_over_tol": 4,
+      "rows": 100000,
+      "ok": false
+    }
+  },
+  "benchmark": {
+    "xgboost": {
+      "native": {
+        "1": {
+          "p50_ms": 1.34755,
+          "p99_ms": 5.3223379999999985,
+          "per_event_p50_us": 1347.55
+        },
+        "32": {
+          "p50_ms": 2.13995,
+          "p99_ms": 10.650199999999984,
+          "per_event_p50_us": 66.8734375
+        },
+        "500": {
+          "p50_ms": 4.75315,
+          "p99_ms": 13.512948,
+          "per_event_p50_us": 9.5063
+        }
+      },
+      "onnx": {
+        "1": {
+          "p50_ms": 0.07815,
+          "p99_ms": 0.4245339999999996,
+          "per_event_p50_us": 78.14999999999999
+        },
+        "32": {
+          "p50_ms": 0.471,
+          "p99_ms": 1.1811479999999983,
+          "per_event_p50_us": 14.71875
+        },
+        "500": {
+          "p50_ms": 6.2546,
+          "p99_ms": 11.979652,
+          "per_event_p50_us": 12.5092
+        }
+      }
+    },
+    "lightgbm": {
+      "native": {
+        "1": {
+          "p50_ms": 1.27215,
+          "p99_ms": 2.811642,
+          "per_event_p50_us": 1272.1499999999999
+        },
+        "32": {
+          "p50_ms": 1.4575,
+          "p99_ms": 3.185119999999996,
+          "per_event_p50_us": 45.546875
+        },
+        "500": {
+          "p50_ms": 5.8180499999999995,
+          "p99_ms": 10.705436999999998,
+          "per_event_p50_us": 11.636099999999999
+        }
+      },
+      "onnx": {
+        "1": {
+          "p50_ms": 0.060899999999999996,
+          "p99_ms": 0.8416829999999964,
+          "per_event_p50_us": 60.9
+        },
+        "32": {
+          "p50_ms": 0.41835,
+          "p99_ms": 1.3524789999999973,
+          "per_event_p50_us": 13.0734375
+        },
+        "500": {
+          "p50_ms": 4.077999999999999,
+          "p99_ms": 6.559522999999991,
+          "per_event_p50_us": 8.155999999999999
+        }
+      }
+    }
+  },
+  "dataset": {
+    "file": "history_full.parquet",
+    "digest": "ff017c8b7241c7e70c2d9a13cc44e9db969625c39fc8fe7b5c2d835d8bde9ca0",
+    "rows": 600000,
+    "days": 60,
+    "fraud_rate_true": 0.008428333333333333,
+    "fraud_rate_label": 0.008418333333333333,
+    "scenarios": {
+      "slow_fraud": 525,
+      "geo_jump": 364,
+      "account_takeover": 335,
+      "new_device": 1002,
+      "traveler": 1710,
+      "card_testing": 1941,
+      "legit_burst": 3102,
+      "normal": 588637,
+      "big_purchase": 492,
+      "atypical_amount": 163,
+      "burst": 1729
+    },
+    "features": [
+      "amount",
+      "f_cnt_10m",
+      "f_sum_10m",
+      "f_max_10m",
+      "f_small_tx_cnt_10m",
+      "avg_amount_30d",
+      "std_amount_30d",
+      "n_known_devices",
+      "account_age_days",
+      "amount_to_avg_ratio",
+      "amount_zscore",
+      "is_foreign",
+      "ip_country_mismatch"
+    ]
+  },
+  "params": {
+    "xgboost": {
+      "learning_rate": 0.0393908797684414,
+      "subsample": 0.8559684085310095,
+      "colsample_bytree": 0.5716766437045232,
+      "reg_lambda": 13.133498570503443,
+      "max_depth": 6,
+      "min_child_weight": 4.097377375685535
+    },
+    "lightgbm": {
+      "learning_rate": 0.08216908785704091,
+      "subsample": 0.9567092003128319,
+      "colsample_bytree": 0.9818313802505146,
+      "reg_lambda": 0.18439619501993149,
+      "num_leaves": 104,
+      "min_child_samples": 48
+    }
+  },
+  "costs": {
+    "review_cost": 5.0,
+    "block_friction_cost": 25.0
+  },
+  "split_days": {
+    "valid": 10,
+    "test": 10
+  },
+  "registry": {
+    "model": "fraud-champion",
+    "alias": "champion",
+    "version": "1"
+  }
+}

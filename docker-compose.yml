@@ -83,11 +83,54 @@ services:
 
   prometheus:
     <<: *core
-    image: prom/prometheus:latest      # pin in M5
-    volumes: ["./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    image: prom/prometheus:v3.2.1
+    volumes: ["./observability/prometheus:/etc/prometheus:ro"]      # prometheus.yml + slo_rules.yml
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=6h"]
     ports: ["9090:9090"]
     mem_limit: 350m
+
+  # Model registry: the scorer follows the `champion` alias here. Training registers models through it.
+  mlflow:
+    <<: *core
+    build: { context: ., dockerfile: docker/mlflow.Dockerfile }
+    image: fraud/mlflow:local
+    ports: ["5000:5000"]
+    volumes: ["mlflow-data:/mlflow"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5000/health', timeout=3)"]
+      interval: 5s
+      retries: 30
+    mem_limit: 500m
+
+  kafka-exporter:
+    <<: *core
+    image: danielqsj/kafka-exporter:v1.9.0
+    command: ["--kafka.server=kafka:29092"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    mem_limit: 64m
+
+  redis-exporter:
+    <<: *core
+    image: oliver006/redis_exporter:v1.67.0
+    environment: { REDIS_ADDR: "redis://redis:6379" }
+    mem_limit: 48m
+
+  # Optional tracing (profile `trace`): make trace-up. The scorer exports spans when OTEL_EXPORTER_OTLP_ENDPOINT is set.
+  otel-collector:
+    profiles: ["trace"]
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./observability/otel/collector.yaml:/etc/otelcol/config.yaml:ro"]
+    mem_limit: 160m
+
+  tempo:
+    profiles: ["trace"]
+    image: grafana/tempo:2.7.1
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes: ["./observability/tempo/tempo.yaml:/etc/tempo.yaml:ro", "tempo-data:/var/tempo"]
+    ports: ["3200:3200"]
+    mem_limit: 256m
 
   postgres:
     profiles: ["ops", "explain", "chaos"]
@@ -99,13 +142,13 @@ services:
 
   grafana:
     profiles: ["ops", "explain"]
-    image: grafana/grafana:latest      # pin in M5
+    image: grafana/grafana:11.6.0
     environment: { GF_AUTH_ANONYMOUS_ENABLED: "true", GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer }
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports: ["3000:3000"]
-    mem_limit: 150m
+    mem_limit: 256m
 
   llm-gateway:
     profiles: ["explain"]
@@ -121,12 +164,20 @@ services:
     build: { context: ., dockerfile: docker/app.Dockerfile }
     image: fraud/app:local
     command: ["scorer"]
-    environment: { BOOTSTRAP: "kafka:29092", CONFIG_DIR: /app/config, REDIS_URL: "redis://redis:6379/0" }
-    volumes: ["./config:/app/config:ro"]
+    environment:
+      BOOTSTRAP: "kafka:29092"
+      CONFIG_DIR: /app/config
+      REDIS_URL: "redis://redis:6379/0"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"      # set by `make trace-up`
+      BATCH_MAX_MESSAGES: "${BATCH_MAX_MESSAGES:-}"      # experiment E2 overrides config/scorer.yaml
+      BATCH_MAX_WAIT_MS: "${BATCH_MAX_WAIT_MS:-}"
+      MODEL_CACHE_DIR: /cache            # last downloaded models: the scorer survives MLflow being down (F7)
+    volumes: ["./config:/app/config:ro", "model-cache:/cache"]
     depends_on:
       kafka-init: { condition: service_completed_successfully }
     restart: unless-stopped
-    mem_limit: 250m
+    mem_limit: 300m
 
   feature-writer:
     <<: *core
@@ -164,3 +215,6 @@ services:
 
 volumes:
   flink-ckpt: {}
+  mlflow-data: {}
+  tempo-data: {}
+  model-cache: {}

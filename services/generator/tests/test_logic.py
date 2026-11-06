@@ -63,3 +63,17 @@ def test_generation_is_fast_enough_for_open_loop_at_realistic_scale():
         next_payment(pop, rng, 0, 0)
     per_event_us = (time.perf_counter() - start) / 2_000 * 1e6
     assert per_event_us < 200, f"{per_event_us:.0f} µs per event"
+
+
+def test_trace_sampling_rate_and_determinism():
+    import random
+
+    from generator.logic import maybe_traceparent
+
+    rng = random.Random(5)
+    got = [maybe_traceparent(rng, 0.01) for _ in range(20_000)]
+    sampled = [g for g in got if g]
+    assert 120 <= len(sampled) <= 280                              # ~1% of 20 000
+    assert all(g.startswith("00-") and g.endswith("-01") for g in sampled)
+    assert [maybe_traceparent(random.Random(1), 0.0) for _ in range(100)] == [None] * 100
+    assert maybe_traceparent(random.Random(1), 1.0) is not None

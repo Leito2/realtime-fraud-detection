@@ -1,8 +1,8 @@
-"""E3 (PLAN.md §5.6): what does Flink's network buffer timeout cost in latency?
+"""E3 (PLAN.md section 5.6): what does Flink's network buffer timeout cost in latency?
 
 Usage: python scripts/e3_buffer_timeout.py [--rate 500] [--duration 20] [--values "100 ms" "10 ms" ...]
 Cancels the running feature job, resubmits it with execution.buffer-timeout set per value, and measures each.
-Writes docs/results/e3-buffer-timeout.json.
+Writes docs/results/e3-buffer-timeout.json. Run it on a quiet machine: other CPU work contaminates the result.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import subprocess
 import time
 import urllib.request
 
-from smoke import COMPOSE, ROOT, ensure_stack, flink_job_running, run_load, wait
+from fraud_bench.stack import COMPOSE, ROOT, ensure_stack, flink_job_running, run_load, wait
 
 
 def cancel_jobs() -> None:

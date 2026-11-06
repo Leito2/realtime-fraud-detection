@@ -30,6 +30,8 @@ class EnrichedPayment(Payment):
     f_max_10m: float
     f_small_tx_cnt_10m: int = Field(ge=0)
     t_flink_out_ns: int | None = None
+    # W3C trace context from the Kafka header, never serialised: it is metadata, not business data.
+    traceparent: str | None = Field(default=None, exclude=True)
 
 
 class DecisionEvent(BaseModel):

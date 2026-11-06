@@ -1,0 +1,48 @@
+# SLO and alerts (PLAN.md section 6.5). SLI: share of decisions published in < 80 ms, as a ratio over a window.
+groups:
+  - name: slo
+    interval: 15s
+    rules:
+      - record: fraud:slo_good_ratio:rate5m
+        expr: sum(rate(fraud_e2e_latency_seconds_bucket{le="0.08"}[5m])) / sum(rate(fraud_e2e_latency_seconds_count[5m]))
+      - record: fraud:slo_good_ratio:rate1h
+        expr: sum(rate(fraud_e2e_latency_seconds_bucket{le="0.08"}[1h])) / sum(rate(fraud_e2e_latency_seconds_count[1h]))
+      - record: fraud:throughput:rate1m
+        expr: sum(rate(fraud_decisions_total[1m]))
+      - record: fraud:block_ratio:rate10m
+        expr: sum(rate(fraud_decisions_total{decision="BLOCK"}[10m])) / sum(rate(fraud_decisions_total[10m]))
+
+  - name: alerts
+    rules:
+      # Error budget is 5% (SLO: 95% under 80 ms). Burn rate 6 = spending it 6x too fast, in a short AND a long window.
+      - alert: LatencySLOBurn
+        expr: (1 - fraud:slo_good_ratio:rate5m) / 0.05 > 6 and (1 - fraud:slo_good_ratio:rate1h) / 0.05 > 6
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "Latency SLO burning fast: more than 5% of decisions take over 80 ms" }
+      - alert: ConsumerLagGrowing
+        expr: >
+          sum(kafka_consumergroup_lag{consumergroup="scorer-champion"}) > 30 * fraud:throughput:rate1m
+          or deriv(sum(kafka_consumergroup_lag{consumergroup="scorer-champion"})[5m:]) > 0.02 * fraud:throughput:rate1m
+        for: 3m
+        labels: { severity: critical }
+        annotations: { summary: "Scorer lag above 30 s of traffic or growing steadily" }
+      - alert: FlinkCheckpointsFailing
+        expr: increase(flink_jobmanager_job_numberOfFailedCheckpoints[5m]) >= 2
+        labels: { severity: critical }
+        annotations: { summary: "Two or more Flink checkpoints failed in 5 minutes" }
+      - alert: DlqNotEmpty
+        expr: rate(kafka_topic_partition_current_offset{topic="dlq"}[5m]) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Messages keep landing in the dead-letter queue" }
+      - alert: BlockRateAnomaly
+        expr: fraud:block_ratio:rate10m > 0.03
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "BLOCK rate above the expected 0-3% band: data or model bug" }
+      - alert: ScorerDegraded
+        expr: rate(fraud_degraded_batches_total[5m]) > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations: { summary: "Scorer is deciding without profiles (Redis unavailable): conservative policy active" }

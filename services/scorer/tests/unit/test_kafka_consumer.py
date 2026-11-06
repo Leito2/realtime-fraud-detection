@@ -4,8 +4,11 @@ from scorer.entrypoints.kafka_consumer import run
 
 
 class Msg:
-    def __init__(self, value: bytes, err=None) -> None:
-        self._v, self._e = value, err
+    def __init__(self, value: bytes, err=None, headers=None) -> None:
+        self._v, self._e, self._h = value, err, headers
+
+    def headers(self):
+        return self._h
 
     def value(self):
         return self._v
@@ -60,3 +63,14 @@ def test_empty_polls_do_not_score_or_commit():
     run(c, dlq=lambda *_: None, score=lambda evs: c.log.append("score"), max_messages=500, max_wait_s=0.005,
         stop=stop)
     assert c.log == []
+
+
+def test_traceparent_header_is_attached_to_the_event_but_not_serialised():
+    stop = threading.Event()
+    tp = "00-" + "a" * 32 + "-" + "b" * 16 + "-01"
+    c = FakeConsumer([[Msg(GOOD, headers=[("traceparent", tp.encode()), ("other", b"x")]), Msg(GOOD)]], stop)
+    seen = []
+    run(c, dlq=lambda *_: None, score=lambda evs: seen.extend(evs), max_messages=500, max_wait_s=0.005,
+        stop=stop)
+    assert [e.traceparent for e in seen] == [tp, None]
+    assert "traceparent" not in seen[0].model_dump()

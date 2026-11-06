@@ -4,6 +4,7 @@ CREATE TABLE payments (
   payment_id STRING, user_id STRING, card_id STRING, amount DOUBLE, currency STRING,
   merchant_id STRING, mcc STRING, country STRING, device_id STRING, ip_country STRING,
   channel STRING, event_time STRING, t_scheduled_ns BIGINT, t_sent_ns BIGINT,
+  headers MAP<STRING, BYTES> METADATA VIRTUAL,          -- carries the W3C traceparent through Flink (PLAN.md 6.6)
   proc_time AS PROCTIME()
 ) WITH (
   'connector' = 'kafka', 'topic' = 'payments',
@@ -16,7 +17,8 @@ CREATE TABLE payments_enriched (
   payment_id STRING, user_id STRING, card_id STRING, amount DOUBLE, currency STRING,
   merchant_id STRING, mcc STRING, country STRING, device_id STRING, ip_country STRING,
   channel STRING, event_time STRING, t_scheduled_ns BIGINT, t_sent_ns BIGINT,
-  f_cnt_10m BIGINT, f_sum_10m DOUBLE, f_max_10m DOUBLE, f_small_tx_cnt_10m BIGINT, t_flink_out_ns BIGINT
+  f_cnt_10m BIGINT, f_sum_10m DOUBLE, f_max_10m DOUBLE, f_small_tx_cnt_10m BIGINT, t_flink_out_ns BIGINT,
+  headers MAP<STRING, BYTES> METADATA
 ) WITH (
   'connector' = 'kafka', 'topic' = 'payments-enriched',
   'properties.bootstrap.servers' = 'kafka:29092',
@@ -34,7 +36,8 @@ SELECT
   SUM(amount) OVER w,
   MAX(amount) OVER w,
   CAST(SUM(CASE WHEN amount < 10 THEN 1 ELSE 0 END) OVER w AS BIGINT),
-  CAST(NULL AS BIGINT)
+  CAST(NULL AS BIGINT),
+  headers
 FROM payments
 WINDOW w AS (
   PARTITION BY user_id ORDER BY proc_time

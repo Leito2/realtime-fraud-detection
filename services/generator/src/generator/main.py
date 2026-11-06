@@ -8,7 +8,7 @@ import time
 import orjson
 from confluent_kafka import Producer
 
-from generator.logic import Population, next_payment
+from generator.logic import Population, maybe_traceparent, next_payment
 from generator.schedule import gen_lag_ms, scheduled_ns
 
 GEN_LAG_LIMIT_MS = 5.0      # PLAN.md §5.3: above this p99 the run is invalid
@@ -18,6 +18,7 @@ def run_worker(idx: int, args: argparse.Namespace, out: mp.Queue) -> None:
     rate = args.rate / args.procs
     pop = Population(args.users, args.seed, worker=idx, workers=args.procs)
     rng = random.Random(args.seed * 1000 + idx)
+    trace_rng = random.Random(args.seed * 7919 + idx)     # own stream: tracing never changes the payments
     errors = 0
 
     def on_delivery(err, _msg) -> None:
@@ -41,10 +42,12 @@ def run_worker(idx: int, args: argparse.Namespace, out: mp.Queue) -> None:
             pass
         sent = time.time_ns()
         event = next_payment(pop, rng, due, sent)
+        traceparent = maybe_traceparent(trace_rng, args.trace_sample)
+        headers = [("traceparent", traceparent.encode())] if traceparent else None
         while True:
             try:
                 producer.produce(args.topic, key=event["user_id"], value=orjson.dumps(event),
-                                 on_delivery=on_delivery)
+                                 headers=headers, on_delivery=on_delivery)
                 break
             except BufferError:
                 producer.poll(0.001)
@@ -63,6 +66,7 @@ def main() -> None:
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--topic", default="payments")
+    ap.add_argument("--trace-sample", type=float, default=0.01, help="share of payments with a traceparent")
     ap.add_argument("--bootstrap", default=os.environ.get("BOOTSTRAP", "kafka:29092"))
     ap.add_argument("--offline", metavar="PARQUET", help="write a simulated history here instead of Kafka")
     ap.add_argument("--days", type=int, default=60, help="--offline: simulated days")

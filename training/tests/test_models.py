@@ -42,3 +42,11 @@ def test_benchmark_reports_percentiles_per_batch_size():
     assert set(out) == {1, 32, 500}
     for stats in out.values():
         assert stats["p50_ms"] <= stats["p99_ms"] and stats["per_event_p50_us"] > 0
+
+
+def test_parity_report_counts_rows_over_tolerance_without_raising():
+    from fraud_training.models import parity_report
+
+    rep = parity_report(np.array([0.1, 0.2, 0.3]), np.array([0.1, 0.2 + 1e-3, 0.3]))
+    assert rep["rows_over_tol"] == 1 and rep["ok"] is False and rep["max_abs_diff"] > 9e-4
+    assert parity_report(np.array([0.1]), np.array([0.1]))["ok"] is True

@@ -3,7 +3,8 @@
 Critical-path ports are batch-shaped on purpose: one Redis round trip and one inference per micro-batch.
 """
 from collections.abc import Sequence
-from typing import Protocol
+from dataclasses import dataclass, field
+from typing import NamedTuple, Protocol
 
 import numpy as np
 
@@ -18,11 +19,16 @@ class ProfileStore(Protocol):
     def get_many(self, user_ids: Sequence[str]) -> list[dict]: ...
 
 
-class ModelRuntime(Protocol):
-    name: str
+class Prediction(NamedTuple):
+    """Scores plus the identity of the model that produced them, so a hot swap can never mislabel a batch."""
+
+    scores: np.ndarray
+    model: str
     version: str
 
-    def predict(self, X: np.ndarray) -> np.ndarray: ...
+
+class ModelRuntime(Protocol):
+    def predict(self, X: np.ndarray) -> Prediction: ...
 
 
 class DecisionSink(Protocol):
@@ -31,3 +37,44 @@ class DecisionSink(Protocol):
 
 class Clock(Protocol):
     def now_ns(self) -> int: ...
+
+
+@dataclass(frozen=True)
+class BatchStats:
+    """What one micro-batch tells the outside world; the use case builds it, an adapter exports it."""
+
+    size: int
+    redis_s: float
+    inference_s: float
+    publish_s: float
+    degraded: bool
+    model: str
+    version: str
+    decisions: dict[str, int] = field(default_factory=dict)
+    scores: list[float] = field(default_factory=list)
+    e2e_s: list[float] = field(default_factory=list)       # decision published - payment scheduled, per event
+
+
+class Metrics(Protocol):
+    def observe_batch(self, stats: BatchStats) -> None: ...
+
+
+@dataclass(frozen=True)
+class SpanData:
+    name: str
+    start_ns: int
+    end_ns: int
+
+
+class Tracer(Protocol):
+    def record(self, traceparent: str, root: SpanData, children: Sequence[SpanData]) -> None: ...
+
+
+class NullTracer:
+    def record(self, traceparent: str, root: SpanData, children: Sequence[SpanData]) -> None:
+        pass
+
+
+class NullMetrics:
+    def observe_batch(self, stats: BatchStats) -> None:
+        pass

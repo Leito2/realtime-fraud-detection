@@ -20,6 +20,13 @@ class Settings:
     redis_timeout_s: float
     max_messages: int
     max_wait_s: float
+    tracking_uri: str
+    model_name: str
+    model_alias: str
+    poll_s: float
+    onnx_threads: int
+    model_cache_dir: Path | None
+    metrics_port: int
     thresholds: Thresholds
     policy: DegradedPolicy
 
@@ -39,8 +46,15 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
         dlq_topic=kafka["dlq_topic"],
         redis_url=os.environ.get("REDIS_URL", scorer["redis"]["url"]),
         redis_timeout_s=scorer["redis"]["timeout_ms"] / 1000,
-        max_messages=scorer["batch"]["max_messages"],
-        max_wait_s=scorer["batch"]["max_wait_ms"] / 1000,
+        max_messages=int(os.environ.get("BATCH_MAX_MESSAGES") or scorer["batch"]["max_messages"]),
+        max_wait_s=float(os.environ.get("BATCH_MAX_WAIT_MS") or scorer["batch"]["max_wait_ms"]) / 1000,
+        tracking_uri=os.environ.get("MLFLOW_TRACKING_URI", scorer["mlflow"]["tracking_uri"]),
+        model_name=scorer["model"]["name"],
+        model_alias=scorer["model"]["challenger_alias" if shadow else "champion_alias"],
+        poll_s=float(scorer["model"]["poll_seconds"]),
+        onnx_threads=int(scorer["onnx"]["intra_op_num_threads"]),
+        metrics_port=int(os.environ.get("METRICS_PORT", 9101 if shadow else 9100)),
+        model_cache_dir=Path(os.environ["MODEL_CACHE_DIR"]) if os.environ.get("MODEL_CACHE_DIR") else None,
         thresholds=Thresholds(th["threshold_set"], th["review"], th["block"]),
         policy=DegradedPolicy(Thresholds(f"{th['threshold_set']}-degraded", deg["review"], deg["block"]),
                               deg["max_auto_approve_amount"]),

@@ -1357,4 +1357,19 @@ Revisión completa del plan con el usuario, pregunta por pregunta, antes de impl
 | 31 | Lenguaje | Python; Go se decide en D3 con datos | §11.4 |
 | 32 | Código | Servicios orientados a eventos; Clean Architecture en `scorer` y `explainer` | ADR-0002 |
 
-**Siguiente paso:** M1 · Esqueleto andante (§11.3).
+## 16. Hallazgos de implementación (M3-M5)
+
+Cosas que la implementación enseñó y que cambian o precisan el plan. Las cifras están en `docs/results/` y en el README.
+
+| # | Hallazgo | Efecto |
+|---|---|---|
+| H1 | **El export a ONNX de LightGBM no es fiel**: en 100 000 filas de test, 4 difieren del modelo nativo en más de 1e-5 (máximo 0.06) porque el convertidor guarda los umbrales de corte en float32. El de XGBoost difiere 9e-8. | La paridad es una compuerta: un modelo que no pasa no puede ser champion. XGBoost gana también en PR-AUC (0.590 vs 0.503), así que el champion queda como estaba previsto, ahora con una razón medida. |
+| H2 | ONNX Runtime con 1 hilo es ~17x más rápido que el wrapper nativo con un evento, ~4.5x con lote 32 y **más lento** con lote 500 (nativo usa 2 hilos). | La cifra "{Z}x" del CV debe citar el tamaño de lote real del scorer (E2), no el mejor caso. |
+| H3 | El generador es suficientemente difícil (R6): reglas PR-AUC 0.16, XGBoost 0.59. `slow_fraud` queda en ~1% de recall: una ventana de 10 min no lo ve. | Motiva `f_cnt_1h` / opción B (E7) como trabajo de M9. |
+| H4 | MLflow 3.18 arranca un pool de consumidores `huey` (~145 MB cada uno) y se come 900 MB. Con `MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false` y 1 worker usa ~370 MB. | §8: MLflow pasa de 200 MB a 500 MB de límite. Ver Dockerfile. |
+| H5 | El conector de Kafka de Flink SQL lee y escribe `headers` (`MAP<STRING, BYTES> METADATA`) sin tocarlos. | Casilla del §10 verificada: el `traceparent` viaja por Flink. |
+| H6 | `kafka-exporter` v1.9.0 funciona con Kafka en modo KRaft. | Casilla del §10 verificada. |
+| H7 | **La medición se invalida con otra carga en el mismo equipo** (un juego abierto llevó el p50 de 16 ms a 1 s y la regla de validez de `gen_lag` lo detectó). | Los números de E1-E3 se toman con el equipo en reposo; los de M1 se conservan, los contaminados se descartan. |
+| H8 | El histórico offline se guarda en Parquet local con SHA-256 en cada corrida de MLflow. MinIO (manifiesto versionado) se difiere a M6b, donde el backtesting lo necesita de verdad. | Desviación consciente del criterio de M3. |
+
+**Siguiente paso:** M6 · MLOps online (§11.3).

@@ -10,13 +10,13 @@ dependencies = ["fraudcore"]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*", "services/generator", "services/scorer", "services/latency", "services/profile_builder", "services/feature_writer", "training"]
+members = ["packages/*", "services/generator", "services/scorer", "services/latency", "services/profile_builder", "services/feature_writer", "training", "bench"]
 
 [tool.uv.sources]
 fraudcore = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "grpcio-tools>=1.66", "import-linter>=2.0"]
+dev = ["pytest>=8", "ruff>=0.6", "grpcio-tools>=1.66", "import-linter>=2.0", "onnx>=1.16"]
 
 [tool.ruff]
 line-length = 110

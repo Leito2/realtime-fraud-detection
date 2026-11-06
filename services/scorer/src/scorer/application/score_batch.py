@@ -1,12 +1,25 @@
 """Kafka-path use case: enriched events → decisions (PLAN.md §2.6 step 4)."""
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from fraudcore.contracts import DecisionEvent, EnrichedPayment
 from fraudcore.features import PROFILE_DEFAULTS, build_row, vectorize
 from fraudcore.thresholds import Thresholds
-from scorer.application.ports import Clock, DecisionSink, ModelRuntime, ProfileStore, ProfileUnavailable
+from scorer.application.ports import (
+    BatchStats,
+    Clock,
+    DecisionSink,
+    Metrics,
+    ModelRuntime,
+    NullMetrics,
+    NullTracer,
+    ProfileStore,
+    ProfileUnavailable,
+    SpanData,
+    Tracer,
+)
 from scorer.domain.degraded import DegradedPolicy
 
 
@@ -18,27 +31,43 @@ class ScoreBatch:
     thresholds: Thresholds
     policy: DegradedPolicy
     clock: Clock
+    metrics: Metrics = field(default_factory=NullMetrics)
+    tracer: Tracer = field(default_factory=NullTracer)
 
     def __call__(self, events: list[EnrichedPayment]) -> list[DecisionEvent]:
         if not events:
             return []
+        t0 = self.clock.now_ns()
         try:
             profiles, degraded = self.profiles.get_many([e.user_id for e in events]), False
         except ProfileUnavailable:
             profiles, degraded = [dict(PROFILE_DEFAULTS) for _ in events], True
 
+        t1 = self.clock.now_ns()
         X = np.array([vectorize(build_row(e, p)) for e, p in zip(events, profiles, strict=True)])
-        scores = self.model.predict(X)
-        now = self.clock.now_ns()
+        prediction = self.model.predict(X)
+        now = self.clock.now_ns()                 # t_decided: the model has spoken
+        t2 = now
         applied = self.policy.thresholds if degraded else self.thresholds
 
         decisions = []
-        for e, s in zip(events, scores, strict=True):
+        for e, s in zip(events, prediction.scores, strict=True):
             score = float(s)
             decision = self.policy.decide(score, e.amount) if degraded else self.thresholds.decide(score)
             decisions.append(DecisionEvent(
                 payment_id=e.payment_id, user_id=e.user_id, decision=decision, score=score,
-                model=self.model.name, model_version=self.model.version, threshold_set=applied.name,
+                model=prediction.model, model_version=prediction.version, threshold_set=applied.name,
                 degraded=degraded, t_scheduled_ns=e.t_scheduled_ns, t_decided_ns=now))
         self.sink.publish_batch(decisions)
+        t3 = self.clock.now_ns()
+        self.metrics.observe_batch(BatchStats(
+            size=len(events), redis_s=(t1 - t0) / 1e9, inference_s=(t2 - t1) / 1e9, publish_s=(t3 - t2) / 1e9,
+            degraded=degraded, model=prediction.model, version=prediction.version,
+            decisions=dict(Counter(d.decision for d in decisions)), scores=[d.score for d in decisions],
+            e2e_s=[(t3 - d.t_scheduled_ns) / 1e9 for d in decisions]))
+        for e in events:
+            if e.traceparent:
+                self.tracer.record(e.traceparent, SpanData("payment.decision", e.t_scheduled_ns, t3), [
+                    SpanData("kafka+flink transit", e.t_scheduled_ns, t0), SpanData("profile lookup", t0, t1),
+                    SpanData("model inference", t1, t2), SpanData("publish decision", t2, t3)])
         return decisions

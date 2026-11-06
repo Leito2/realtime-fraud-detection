@@ -64,3 +64,10 @@ def build_payment(habits: dict, uid: str, rng: random.Random, *, amount: float |
 def next_payment(pop: Population, rng: random.Random, t_scheduled_ns: int, t_sent_ns: int) -> dict:
     uid = pop.pick_user(rng)
     return build_payment(pop.habits(uid), uid, rng, t_scheduled_ns=t_scheduled_ns, t_sent_ns=t_sent_ns)
+
+
+def maybe_traceparent(rng: random.Random, sample_rate: float) -> str | None:
+    """Head-based sampling: the generator decides once, and the decision travels in the Kafka header."""
+    from fraudcore.tracing import new_traceparent
+
+    return new_traceparent(rng) if sample_rate > 0 and rng.random() < sample_rate else None

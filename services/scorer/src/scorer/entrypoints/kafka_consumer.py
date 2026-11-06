@@ -7,6 +7,13 @@ from pydantic import ValidationError
 from fraudcore.contracts import EnrichedPayment
 
 
+def _traceparent(message) -> str | None:
+    for key, value in message.headers() or []:
+        if key == "traceparent" and value:
+            return value.decode("ascii", errors="replace") if isinstance(value, bytes) else value
+    return None
+
+
 def run(consumer, dlq: Callable[[bytes, str], None], score: Callable[[list[EnrichedPayment]], object],
         max_messages: int, max_wait_s: float, stop: threading.Event) -> None:
     while not stop.is_set():
@@ -18,7 +25,9 @@ def run(consumer, dlq: Callable[[bytes, str], None], score: Callable[[list[Enric
             if m.error():
                 continue
             try:
-                events.append(EnrichedPayment.model_validate_json(m.value()))
+                event = EnrichedPayment.model_validate_json(m.value())
+                event.traceparent = _traceparent(m)
+                events.append(event)
             except ValidationError as exc:
                 dlq(m.value(), f"invalid enriched payment: {exc.error_count()} errors")
         if events:

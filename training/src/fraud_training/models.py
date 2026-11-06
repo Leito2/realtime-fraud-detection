@@ -73,6 +73,13 @@ def check_parity(native: np.ndarray, onnx: np.ndarray, tol: float = PARITY_TOL) 
     return diff
 
 
+def parity_report(native: np.ndarray, onnx: np.ndarray, tol: float = PARITY_TOL) -> dict:
+    """Non-raising parity measurement, to compare exporters; ``check_parity`` is the gate for the champion."""
+    diff = np.abs(np.asarray(native, dtype=np.float64) - np.asarray(onnx, dtype=np.float64))
+    return {"max_abs_diff": float(diff.max()), "rows_over_tol": int((diff >= tol).sum()),
+            "rows": int(diff.size), "ok": bool(diff.max() < tol)}
+
+
 def benchmark(predict: Callable[[np.ndarray], np.ndarray], X: np.ndarray, batch_sizes=(1, 32, 500),
               repeats: int = 200) -> dict[int, dict[str, float]]:
     """Latency of one call per batch size, plus the amortised cost per event (PLAN.md 4.7)."""

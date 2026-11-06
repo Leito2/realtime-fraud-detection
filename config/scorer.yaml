@@ -1,5 +1,6 @@
 batch: { max_messages: 500, max_wait_ms: 5 }   # experiment E2 sweeps these
 onnx: { intra_op_num_threads: 1 }
 redis: { url: "redis://redis:6379/0", timeout_ms: 5 }
-model: { registry_alias: champion, poll_seconds: 30 }
+model: { name: fraud-champion, champion_alias: champion, challenger_alias: challenger, poll_seconds: 5 }
+mlflow: { tracking_uri: "http://mlflow:5000" }
 kafka: { bootstrap: "kafka:29092", input_topic: payments-enriched, output_topic: decisions, shadow_topic: shadow-scores, dlq_topic: dlq }
