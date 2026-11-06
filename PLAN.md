@@ -1380,4 +1380,8 @@ Cosas que la implementación enseñó y que cambian o precisan el plan. Las cifr
 | H15 | **`--trials 0` no es el champion documentado**: PR-AUC 0.568 y recall@1% FPR 0.643, contra 0.590 y 0.674 con la búsqueda de hiperparámetros. | Los números oficiales de `docs/results/m3-offline-eval.json` salen de una corrida completa; las corridas rápidas son para desarrollo. |
 | H16 | Con la misma semilla, el generador repite los `payment_id` y el auditor (`ON CONFLICT DO NOTHING`) descarta las repeticiones. Se vio como decisiones "viejas" tras una corrida nueva. | Cada corrida de prueba usa un `--stream-seed` distinto. |
 
-**Siguiente paso:** M6 · MLOps online (§11.3).
+| H17 | **La demo de drift termina con promoción**: champion v7 -> v8, recall sobre el patrón nuevo 25.0% -> 59.4% (muestras de decenas de fraudes). El FPR en vivo (6-9%) sigue por encima del ~1% offline porque el régimen de la demo (pocos usuarios, mucho fraude, perfiles fríos) no es el histórico de 60 días. | El README documenta el mecanismo, no una cifra de recall; las cifras de CV no salen de esta demo. |
+| H18 | **`json.ignore-parse-errors` descarta en silencio los pagos mal formados** que llegan a `payments`. | `flink/sql/m8_validated.sql` agrega una rama sobre el origen crudo que copia lo inválido al topic `dlq` (F6). |
+| H19 | La primera llamada gRPC/REST tras arrancar sale `degraded` (conexiones frías a Redis) y tarda ~100 ms; las siguientes bajan a 1-4 ms de servidor. | El calentamiento se descarta en E11 (`warmup_s`). |
+
+**Siguiente paso:** M8 · correr F1-F9 y publicar `docs/resilience/`; después M9 (E4, E6, E7, E10) y M10.

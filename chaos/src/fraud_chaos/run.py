@@ -121,7 +121,8 @@ def run_experiment(exp: Experiment, restore: bool = True) -> dict:
     produced = [r["payment_id"] for _, r in read_topic(BOOTSTRAP, "payments", t_start - 2, t_end + 5)
                 if is_valid_payment(r)]
     decided = to_decided(read_topic(BOOTSTRAP, "decisions", t_start - 2))
-    in_run = [d for d in decided if d.payment_id in set(produced)]
+    produced_ids = set(produced)                      # built once: a set per element made this quadratic
+    in_run = [d for d in decided if d.payment_id in produced_ids]
     before = [d.latency_ms for d in in_run if d.decided_s < fault_s]
     base_p95 = sorted(before)[int(0.95 * len(before))] if before else float("nan")
     tl = timeline(in_run, fault_s, lo=-exp.fault_at_s + 15, hi=exp.observe_s + 60)

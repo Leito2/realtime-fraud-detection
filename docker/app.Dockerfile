@@ -8,5 +8,7 @@ COPY pyproject.toml uv.lock ./
 COPY packages ./packages
 COPY services ./services
 COPY training/pyproject.toml ./training/pyproject.toml
+COPY chaos/pyproject.toml ./chaos/pyproject.toml
+COPY bench ./bench
 RUN uv sync --frozen --no-dev --package scorer --package generator --package latency \
     --package profile_builder --package feature_writer --package auditor --package explainer --package api --package fraud-bench
