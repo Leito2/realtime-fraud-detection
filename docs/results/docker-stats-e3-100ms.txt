@@ -1,0 +1,8 @@
+realtime-fraud-detection-latency-run-2a6ddabf2815	18.34MiB / 200MiB	6.11%
+realtime-fraud-detection-taskmanager-1	421.7MiB / 1.221GiB	147.35%
+realtime-fraud-detection-jobmanager-1	407.8MiB / 850MiB	69.89%
+realtime-fraud-detection-scorer-1	46.16MiB / 250MiB	3.22%
+realtime-fraud-detection-feature-writer-1	33.51MiB / 150MiB	0.36%
+realtime-fraud-detection-redis-1	21.68MiB / 200MiB	0.30%
+realtime-fraud-detection-prometheus-1	54.05MiB / 350MiB	0.63%
+realtime-fraud-detection-kafka-1	634MiB / 850MiB	141.83%

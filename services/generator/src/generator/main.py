@@ -64,7 +64,23 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--topic", default="payments")
     ap.add_argument("--bootstrap", default=os.environ.get("BOOTSTRAP", "kafka:29092"))
+    ap.add_argument("--offline", metavar="PARQUET", help="write a simulated history here instead of Kafka")
+    ap.add_argument("--days", type=int, default=60, help="--offline: simulated days")
+    ap.add_argument("--payments-per-day", type=int, default=50_000, help="--offline: payments per day")
     args = ap.parse_args()
+
+    if args.offline:
+        from datetime import UTC, datetime, timedelta  # lazy: polars is only needed offline
+
+        from generator.offline import generate_history
+
+        today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        pop = Population(args.users, args.seed)
+        start = today - timedelta(days=args.days)
+        df = generate_history(pop, args.seed, start, args.days, args.payments_per_day)
+        df.write_parquet(args.offline)
+        print(orjson.dumps({"rows": df.height, "path": args.offline}).decode(), flush=True)
+        return
 
     out: mp.Queue = mp.Queue()
     procs = [mp.Process(target=run_worker, args=(i, args, out)) for i in range(args.procs)]

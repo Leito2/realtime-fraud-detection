@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 PROFILE ?= core
-.PHONY: help doctor setup up down ps logs test lint fmt smoke bench chaos train promote
+.PHONY: help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train promote
 
 help:      ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
@@ -23,6 +23,11 @@ lint:      ## Lint + dependency rule (ADR-0002)
 	uv run lint-imports --config services/scorer/pyproject.toml
 fmt:       ## Format
 	uv run ruff format .
+profiles:  ## Simulate 20 days of history and load user profiles into Redis (needs `make up`)
+	docker compose --profile tools run --rm -T generator --offline /data/history.parquet --days 20 --payments-per-day 20000
+	docker compose --profile tools run --rm -T profile-builder --history /data/history.parquet
+parity:    ## Feature parity: Flink output vs fraudcore reference (needs `make up`)
+	uv run pytest tests/integration -m integration -q
 smoke:     ## End-to-end smoke: p50/p95/p99 at RATE ev/s (default 2000)
 	python scripts/smoke.py --rate $(or $(RATE),2000)
 train bench chaos promote:   ## Implemented in later milestones (PLAN.md §11)

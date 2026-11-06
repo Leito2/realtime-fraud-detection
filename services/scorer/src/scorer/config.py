@@ -16,6 +16,8 @@ class Settings:
     input_topic: str
     output_topic: str
     dlq_topic: str
+    redis_url: str
+    redis_timeout_s: float
     max_messages: int
     max_wait_s: float
     thresholds: Thresholds
@@ -35,6 +37,8 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
         input_topic=kafka["input_topic"],
         output_topic=kafka["shadow_topic"] if shadow else kafka["output_topic"],
         dlq_topic=kafka["dlq_topic"],
+        redis_url=os.environ.get("REDIS_URL", scorer["redis"]["url"]),
+        redis_timeout_s=scorer["redis"]["timeout_ms"] / 1000,
         max_messages=scorer["batch"]["max_messages"],
         max_wait_s=scorer["batch"]["max_wait_ms"] / 1000,
         thresholds=Thresholds(th["threshold_set"], th["review"], th["block"]),

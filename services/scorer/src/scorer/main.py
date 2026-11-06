@@ -3,11 +3,12 @@ import argparse
 import signal
 import threading
 
+import redis
 from confluent_kafka import Consumer, Producer
 
 from scorer import config
-from scorer.adapters.default_profiles import DefaultProfileStore
 from scorer.adapters.kafka_decisions import KafkaDecisionSink
+from scorer.adapters.redis_profiles import RedisProfileStore
 from scorer.adapters.rule_model import RuleModel
 from scorer.adapters.system_clock import SystemClock
 from scorer.application.score_batch import ScoreBatch
@@ -28,8 +29,11 @@ def main() -> None:
     })
     consumer.subscribe([cfg.input_topic])
 
+    t = cfg.redis_timeout_s
+    redis_client = redis.Redis.from_url(cfg.redis_url, socket_timeout=t, socket_connect_timeout=t)
     score = ScoreBatch(
-        profiles=DefaultProfileStore(), model=RuleModel(), sink=KafkaDecisionSink(producer, cfg.output_topic),
+        profiles=RedisProfileStore(redis_client), model=RuleModel(),
+        sink=KafkaDecisionSink(producer, cfg.output_topic),
         thresholds=cfg.thresholds, policy=cfg.policy, clock=SystemClock())
 
     def to_dlq(raw: bytes, why: str) -> None:

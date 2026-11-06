@@ -10,7 +10,7 @@ dependencies = ["fraudcore"]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*", "services/generator", "services/scorer", "services/latency"]
+members = ["packages/*", "services/generator", "services/scorer", "services/latency", "services/profile_builder", "services/feature_writer", "training"]
 
 [tool.uv.sources]
 fraudcore = { workspace = true }
@@ -29,5 +29,6 @@ select = ["E", "F", "I", "UP", "B"]
 known-first-party = ["fraudcore"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages/fraudcore/tests", "services", "tests"]
+markers = ["integration: needs the docker stack (make up); skipped when it is not running"]
+testpaths = ["packages/fraudcore/tests", "services", "training", "tests"]
 addopts = "--import-mode=importlib"

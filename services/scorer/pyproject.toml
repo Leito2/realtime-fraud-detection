@@ -3,7 +3,7 @@ name = "scorer"
 version = "0.1.0"
 description = "Scorer: Clean Architecture service (ADR-0002). Kafka consumer today; gRPC/REST entrypoints later."
 requires-python = ">=3.12"
-dependencies = ["fraudcore", "confluent-kafka>=2.5", "numpy>=1.26", "pyyaml>=6"]
+dependencies = ["fraudcore", "confluent-kafka>=2.5", "numpy>=1.26", "pyyaml>=6", "redis>=5"]
 
 [project.scripts]
 scorer = "scorer.main:main"

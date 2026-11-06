@@ -3,7 +3,7 @@ name = "generator"
 version = "0.1.0"
 description = "Open-loop synthetic payment generator (PLAN.md §3.1)."
 requires-python = ">=3.12"
-dependencies = ["fraudcore", "confluent-kafka>=2.5", "orjson>=3.10"]
+dependencies = ["fraudcore", "confluent-kafka>=2.5", "orjson>=3.10", "polars>=1.0"]
 
 [project.scripts]
 generator = "generator.main:main"

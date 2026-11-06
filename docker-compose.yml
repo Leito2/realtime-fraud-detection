@@ -70,6 +70,7 @@ services:
       taskmanager: { condition: service_started }
       kafka-init: { condition: service_completed_successfully }
     command: ["/opt/flink/submit-job.sh"]
+    environment: { BUFFER_TIMEOUT: "${BUFFER_TIMEOUT:-}" }
     restart: "no"
     mem_limit: 500m
 
@@ -120,12 +121,22 @@ services:
     build: { context: ., dockerfile: docker/app.Dockerfile }
     image: fraud/app:local
     command: ["scorer"]
-    environment: { BOOTSTRAP: "kafka:29092", CONFIG_DIR: /app/config }
+    environment: { BOOTSTRAP: "kafka:29092", CONFIG_DIR: /app/config, REDIS_URL: "redis://redis:6379/0" }
     volumes: ["./config:/app/config:ro"]
     depends_on:
       kafka-init: { condition: service_completed_successfully }
     restart: unless-stopped
     mem_limit: 250m
+
+  feature-writer:
+    <<: *core
+    image: fraud/app:local
+    entrypoint: ["feature_writer"]
+    environment: { BOOTSTRAP: "kafka:29092", REDIS_URL: "redis://redis:6379/0" }
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    mem_limit: 150m
 
   # Run-to-completion tools: docker compose --profile tools run --rm generator --rate 2000 --duration 30
   generator:
@@ -133,7 +144,16 @@ services:
     image: fraud/app:local
     entrypoint: ["generator"]
     environment: { BOOTSTRAP: "kafka:29092" }
-    mem_limit: 400m
+    volumes: ["./data:/data"]
+    mem_limit: 1g
+
+  profile-builder:
+    profiles: ["tools"]
+    image: fraud/app:local
+    entrypoint: ["profile_builder"]
+    environment: { REDIS_URL: "redis://redis:6379/0" }
+    volumes: ["./data:/data:ro"]
+    mem_limit: 1g
 
   latency:
     profiles: ["tools"]

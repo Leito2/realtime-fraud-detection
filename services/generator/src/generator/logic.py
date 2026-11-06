@@ -33,23 +33,34 @@ class Population:
         return rng.choices(self.user_ids, cum_weights=self._cum_weights, k=1)[0]     # O(log n)
 
 
-def next_payment(pop: Population, rng: random.Random, t_scheduled_ns: int, t_sent_ns: int) -> dict:
-    uid = pop.pick_user(rng)
-    h = pop.habits(uid)
-    amount = round(math.exp(rng.gauss(h["mu"], 0.8)), 2)
+def build_payment(habits: dict, uid: str, rng: random.Random, *, amount: float | None = None,
+                  country: str | None = None, device: str | None = None, ip_country: str | None = None,
+                  t_scheduled_ns: int = 0, t_sent_ns: int = 0) -> dict:
+    """One payment of ``uid``; overrides let scenarios depart from the user's habits."""
+    home = habits["country"]
+    paid_from = country or home
+    if amount is None:
+        amount = round(math.exp(rng.gauss(habits["mu"], 0.8)), 2)
+    if ip_country is None:
+        ip_country = paid_from if rng.random() > 0.03 else rng.choice(COUNTRIES)
     return {
         "payment_id": f"{rng.getrandbits(64):016x}{rng.getrandbits(64):016x}",
         "user_id": uid,
-        "card_id": h["card"],
+        "card_id": habits["card"],
         "amount": max(amount, 0.01),
         "currency": "USD",
         "merchant_id": f"m_{rng.randint(0, 4999):04d}",
         "mcc": rng.choice(MCCS),
-        "country": h["country"],
-        "device_id": rng.choice(h["devices"]),
-        "ip_country": h["country"] if rng.random() > 0.03 else rng.choice(COUNTRIES),
+        "country": paid_from,
+        "device_id": device or rng.choice(habits["devices"]),
+        "ip_country": ip_country,
         "channel": rng.choice(CHANNELS),
         "event_time": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "t_scheduled_ns": t_scheduled_ns,
         "t_sent_ns": t_sent_ns,
     }
+
+
+def next_payment(pop: Population, rng: random.Random, t_scheduled_ns: int, t_sent_ns: int) -> dict:
+    uid = pop.pick_user(rng)
+    return build_payment(pop.habits(uid), uid, rng, t_scheduled_ns=t_scheduled_ns, t_sent_ns=t_sent_ns)

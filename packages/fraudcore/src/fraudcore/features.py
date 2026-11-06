@@ -7,6 +7,10 @@ DERIVED = ["amount_to_avg_ratio", "amount_zscore", "is_foreign", "ip_country_mis
 FEATURE_ORDER = ["amount", *VELOCITY, *PROFILE, *DERIVED]
 
 # New-user defaults: training MUST use exactly the same values (PLAN.md §12, skew).
+# Velocity window of the Flink job (flink/sql/*.sql); a test pins these to the SQL text.
+WINDOW_S = 600
+SMALL_TX_AMOUNT = 10.0
+
 PROFILE_DEFAULTS = {"avg_amount_30d": 0.0, "std_amount_30d": 0.0, "n_known_devices": 0.0,
                     "account_age_days": 0.0, "home_country": None}
 
@@ -46,3 +50,26 @@ def build_row(event, profile: dict) -> dict:
     row.update({f: prof[f] for f in PROFILE})
     row.update(derived(e["amount"], e["country"], e["ip_country"], prof))
     return row
+
+
+def velocity_reference(events) -> list[dict]:
+    """Offline reference of the Flink OVER window (PLAN.md §4.3 parity).
+
+    ``events``: dicts with ``user_id``, ``amount`` and ``ts`` (seconds), in arrival order per user.
+    Each result includes the current payment; payments exactly ``WINDOW_S`` old are still inside.
+    Training computes velocity with this function and a parity test compares it with Flink's output.
+    """
+    history: dict[str, list[tuple[float, float]]] = {}
+    out = []
+    for e in events:
+        window = [(t, a) for t, a in history.get(e["user_id"], []) if t >= e["ts"] - WINDOW_S]
+        window.append((e["ts"], e["amount"]))
+        history[e["user_id"]] = window
+        amounts = [a for _, a in window]
+        out.append({
+            "f_cnt_10m": len(amounts),
+            "f_sum_10m": float(sum(amounts)),
+            "f_max_10m": float(max(amounts)),
+            "f_small_tx_cnt_10m": sum(1 for a in amounts if a < SMALL_TX_AMOUNT),
+        })
+    return out

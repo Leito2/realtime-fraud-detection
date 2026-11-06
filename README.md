@@ -55,6 +55,34 @@ A payment is scheduled at a fixed time (`t_scheduled_ns`), whatever the system i
 broker timestamp of its decision minus that scheduled time, so a slow system cannot hide its own delay
 (*coordinated omission*). The scorer is a placeholder rule for now; the real model arrives in M3.
 
+#### Features: computed twice, checked against each other
+Fraud shows in recent behaviour, so each payment is enriched with its user's last 10 minutes: how many payments,
+their total, the largest, and how many were tiny (card testing). Flink computes this online. Training computes
+it offline with `fraudcore.velocity_reference`. If the two ever differ, the model degrades silently
+(*train/serve skew*), so `make parity` replays payments through the real Flink job and compares every value.
+Slow-changing facts (30-day average amount, home country, known devices) come from a batch Profile Builder
+that writes to Redis; the scorer reads them for a whole micro-batch in one round trip.
+
+One thing the parity test found: Flink treats payments of the same user processed in the same millisecond as one
+group, so in a burst the earlier payment can "see" the later one. It is exact for normally spaced payments and
+documented in [PLAN §3.3](PLAN.md) as the reason to measure an alternative (E7).
+
+#### Preliminary: how much does Flink's buffer timeout cost? (E3)
+Flink ships records between operators in network buffers and flushes a buffer when it is full or when a timeout
+expires. The timeout is a direct latency floor for sparse traffic. A first sweep at 500 ev/s (20 s per value, raw
+data in `docs/results/e3-buffer-timeout.json`):
+
+| buffer-timeout | p50 (ms) | p95 (ms) | p99 (ms) |
+|---|---|---|---|
+| 100 ms | 288 | 1434 | 1523 |
+| 10 ms | 23 | 74 | 155 |
+| 5 ms | 30 | 799 | 1355 |
+| 1 ms | 51 | 730 | 1301 |
+
+Only the first conclusion is safe: a 100 ms timeout adds roughly 10x. The 5 ms and 1 ms rows are **not valid**: I
+was running unrelated CPU work on the same laptop during the sweep, and those p95 values are contention, not the
+timeout. E3 is repeated on a quiet machine in M4 before any number from it is quoted.
+
 ### 5. Design Decisions (ADRs)
 ### 6. The Journey of a Payment
 

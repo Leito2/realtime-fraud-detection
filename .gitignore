@@ -36,3 +36,6 @@ checkpoints/
 Thumbs.db
 .idea/
 .vscode/
+
+# local data (simulated history, results scratch)
+data/

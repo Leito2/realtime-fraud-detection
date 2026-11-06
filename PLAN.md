@@ -260,7 +260,12 @@ Este módulo alimenta las secciones **Architecture** (con el diagrama), **Design
 | **B** | PyFlink DataStream con un `KeyedProcessFunction` que mantiene un buffer de 24 h por usuario y calcula todas las features en una pasada, en **modo thread** | Todas las ventanas exactas, en un solo operador | Python en el operador. El modo thread reduce mucho el costo, pero hay que medirlo |
 | **C** | El mismo `KeyedProcessFunction` en Java | La menor latencia posible | Un lenguaje extra en el repo |
 
-El plan es implementar A, medir B y documentar C. También hay que verificar que se puede usar `COUNT(DISTINCT)` dentro de `OVER` en la versión de Flink que se use; si no, se reemplaza con una UDAF.
+El plan es implementar A, medir B y documentar C.
+
+**Resultado del spike S1 en M2 (2026-11-06, Flink 2.0.2):**
+- ✅ **Una sola ventana por `SELECT`:** la opción A funciona para la ventana de 10 min, que cubre las 4 features de velocity del modelo v1 (`FEATURE_ORDER`). Las ventanas de 1 h y 24 h no están en v1.
+- ⚠️ **Semántica de pares (*peers*):** una ventana `RANGE` agrega **juntas** todas las filas de un mismo usuario que Flink procesa en el mismo milisegundo. Dos pagos del mismo usuario que llegan en el mismo lote de `fetch` se ven mutuamente (el primero incluye al segundo, un pago "futuro"). Con pagos separados la semántica es exacta (test de paridad `make parity`); en ráfagas de un usuario muy activo no. La probabilidad de que una fila tenga un par en el mismo milisegundo es ≈ 1 − e^(−λ/1000) para un usuario con λ pagos/s: despreciable para un usuario típico, apreciable solo para claves calientes.
+- **Decisión D2:** v1 usa la opción A. Se documenta el sesgo y se mide el costo de la opción B (`KeyedProcessFunction`, procesa fila a fila, sin pares) en E7 (M9). Si B cabe en el presupuesto de latencia, se adopta. También hay que verificar que se puede usar `COUNT(DISTINCT)` dentro de `OVER` en la versión de Flink que se use; si no, se reemplaza con una UDAF.
 
 **🔁 Alternativas.** Spark Structured Streaming (micro-lotes; se compara en el curso C2). Bytewax o Faust (Python nativo). Kafka Streams (JVM, sin clúster aparte).
 
