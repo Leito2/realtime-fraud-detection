@@ -16,6 +16,7 @@ nn = ["torch>=2.4"]          # challenger MLP (PLAN.md section 4.8); not needed 
 train = "fraud_training.train:main"
 train-challenger = "fraud_training.challenger:main"
 promote = "fraud_training.promote:main"
+retrain = "fraud_training.retrain:main"
 
 [build-system]
 requires = ["hatchling"]

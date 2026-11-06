@@ -1,5 +1,5 @@
 # Written by `make train`: chosen by expected cost on validation data (PLAN.md section 4.6).
-threshold_set: fraud-champion-v1
+threshold_set: fraud-champion-v3
 review: 0.70314
 block: 0.980025
 degraded:

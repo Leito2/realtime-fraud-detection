@@ -31,6 +31,7 @@ class LiveTraffic:
         self._p_legit = hard_legit_rate / AVG_LEGIT_EPISODE_PAYMENTS
         self._miss, self._false_alarm, self._max_span = miss_rate, false_alarm_rate, max_span_s
         self._pending: list[tuple[int, int, dict]] = []     # (due_ns, seq, step) as a min-heap
+        self._injected: list[tuple[str, float]] = []        # (kind, chance per tick) switched on mid-run
         self._seq = 0
 
     def next(self, due_ns: int, sent_ns: int) -> tuple[dict, dict]:
@@ -48,6 +49,10 @@ class LiveTraffic:
         return payment, {"payment_id": payment["payment_id"], "is_fraud": self._known(truth),
                          "scenario": scenario}
 
+    def inject(self, kind: str, rate: float) -> None:
+        """From now on, ``rate`` (share of payments) of traffic also belongs to episodes of ``kind``."""
+        self._injected.append((kind, rate / AVG_FRAUD_EPISODE_PAYMENTS))
+
     def _known(self, truth: bool) -> bool:
         """What the bank knows: some fraud is never reported, a few legitimate payments get disputed."""
         return self._rng.random() >= self._miss if truth else self._rng.random() < self._false_alarm
@@ -57,6 +62,9 @@ class LiveTraffic:
             self._start(self._rng.choice(FRAUD_KINDS), now_ns)
         if self._p_legit and self._rng.random() < self._p_legit:
             self._start(self._rng.choice(LEGIT_HARD_KINDS), now_ns)
+        for kind, chance in self._injected:
+            if self._rng.random() < chance:
+                self._start(kind, now_ns)
 
     def _start(self, kind: str, now_ns: int) -> None:
         rng = self._rng

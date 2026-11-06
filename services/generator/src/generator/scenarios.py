@@ -72,6 +72,14 @@ def make_episode(kind: str, habits: dict, rng: random.Random) -> Episode:
     if kind == "slow_fraud":
         offs = [0.0, rng.uniform(900, 1200), rng.uniform(2300, 2700)]
         return Episode(kind, True, [Step(o, amount(0.9, 1.5)) for o in offs])
+    if kind == "new_pattern":
+        # Drift demo (PLAN.md 4.11): a pattern absent from the training history. Known device, home country,
+        # a moderately large amount, paid every 40-120 s from a foreign IP (a proxy), 4-7 times.
+        far = _far(home, rng)
+        offs = [0.0]
+        for _ in range(rng.randint(3, 6)):
+            offs.append(round(offs[-1] + rng.uniform(40, 120), 2))
+        return Episode(kind, True, [Step(o, amount(1.2, 2.5), ip_country=far) for o in offs])
     if kind == "traveler":
         far = _far(home, rng)
         offs = sorted(rng.uniform(0, 6 * 3600) for _ in range(rng.randint(2, 5)))

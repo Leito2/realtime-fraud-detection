@@ -18,10 +18,12 @@ GEN_LAG_LIMIT_MS = 5.0      # PLAN.md §5.3: above this p99 the run is invalid
 def run_worker(idx: int, args: argparse.Namespace, out: mp.Queue) -> None:
     rate = args.rate / args.procs
     pop = Population(args.users, args.seed, worker=idx, workers=args.procs, zipf=args.zipf)
-    rng = random.Random(args.seed * 1000 + idx)
-    trace_rng = random.Random(args.seed * 7919 + idx)     # own stream: tracing never changes the payments
+    stream = args.stream_seed if args.stream_seed is not None else args.seed
+    rng = random.Random(stream * 1000 + idx)
+    trace_rng = random.Random(stream * 7919 + idx)     # own stream: tracing never changes the payments
     errors = 0
-    live = LiveTraffic(pop, random.Random(args.seed * 31 + idx), fraud_rate=args.fraud_rate,
+    injected = False
+    live = LiveTraffic(pop, random.Random(stream * 31 + idx), fraud_rate=args.fraud_rate,
                        hard_legit_rate=args.hard_legit_rate) if args.scenarios else None
 
     def on_delivery(err, _msg) -> None:
@@ -44,6 +46,10 @@ def run_worker(idx: int, args: argparse.Namespace, out: mp.Queue) -> None:
         while time.time_ns() < due:             # fine wait; if we are already late, send at once (open loop)
             pass
         sent = time.time_ns()
+        if live and args.inject_scenario and not injected and i / rate >= args.inject_after:
+            live.inject(args.inject_scenario, args.inject_rate)
+            injected = True
+            print(f"injected {args.inject_scenario} at t={i / rate:.0f}s", flush=True)
         if live:
             event, label = live.next(due, sent)
             producer.produce(args.labels_topic, key=event["payment_id"], value=orjson.dumps(label))
@@ -72,6 +78,9 @@ def main() -> None:
     ap.add_argument("--users", type=int, default=100_000)
     ap.add_argument("--zipf", type=float, default=1.0,
                     help="user activity skew: 1 = Zipf (E1 key skew), 0 = flat (model demos at low rates)")
+    ap.add_argument("--stream-seed", type=int, default=None,
+                    help="seed of the payment stream (--seed fixes the users); change it between runs "
+                    "against the same Kafka, or payment_ids repeat")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--topic", default="payments")
@@ -80,6 +89,9 @@ def main() -> None:
     ap.add_argument("--fraud-rate", type=float, default=0.01, help="--scenarios: share of fraud payments")
     ap.add_argument("--hard-legit-rate", type=float, default=0.01, help="--scenarios: share of hard-legit")
     ap.add_argument("--labels-topic", default="labels")
+    ap.add_argument("--inject-scenario", help="--scenarios: fraud pattern to switch on mid-run (drift demo)")
+    ap.add_argument("--inject-after", type=float, default=0.0, help="seconds into the run")
+    ap.add_argument("--inject-rate", type=float, default=0.03, help="share of payments of the new pattern")
     ap.add_argument("--trace-sample", type=float, default=0.01, help="share of payments with a traceparent")
     ap.add_argument("--bootstrap", default=os.environ.get("BOOTSTRAP", "kafka:29092"))
     ap.add_argument("--offline", metavar="PARQUET", help="write a simulated history here instead of Kafka")

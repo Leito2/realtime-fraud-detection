@@ -67,3 +67,16 @@ def test_same_seed_same_stream():
 def test_slow_episodes_longer_than_the_max_span_are_not_started():
     kinds = {label["scenario"] for _, label in run(6_000, fraud_rate=0.1, max_span_s=60)}
     assert "slow_fraud" not in kinds and "geo_jump" not in kinds
+
+
+def test_an_injected_pattern_appears_only_after_injection():
+    pop = Population(n_users=300, seed=3)
+    live = LiveTraffic(pop, random.Random(5), fraud_rate=0.0, hard_legit_rate=0.0)
+    before = Counter()
+    for i in range(3_000):
+        before[live.next(i * SECOND // 100, i * SECOND // 100)[1]["scenario"]] += 1
+    live.inject("new_pattern", rate=0.05)
+    after = Counter()
+    for i in range(3_000, 9_000):
+        after[live.next(i * SECOND // 100, i * SECOND // 100)[1]["scenario"]] += 1
+    assert before["new_pattern"] == 0 and after["new_pattern"] > 50

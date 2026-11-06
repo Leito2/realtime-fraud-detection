@@ -32,17 +32,17 @@
     "fraud_rate_true": 0.008428333333333333,
     "fraud_rate_label": 0.008418333333333333,
     "scenarios": {
+      "account_takeover": 335,
+      "big_purchase": 492,
+      "burst": 1729,
       "legit_burst": 3102,
       "atypical_amount": 163,
-      "account_takeover": 335,
       "slow_fraud": 525,
       "card_testing": 1941,
-      "normal": 588637,
-      "burst": 1729,
-      "new_device": 1002,
       "geo_jump": 364,
+      "new_device": 1002,
       "traveler": 1710,
-      "big_purchase": 492
+      "normal": 588637
     },
     "features": [
       "amount",
@@ -63,6 +63,6 @@
   "registry": {
     "model": "fraud-champion",
     "alias": "challenger",
-    "version": "2"
+    "version": "4"
   }
 }

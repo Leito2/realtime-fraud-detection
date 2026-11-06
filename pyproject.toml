@@ -10,13 +10,13 @@ dependencies = ["fraudcore"]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*", "services/generator", "services/scorer", "services/latency", "services/profile_builder", "services/feature_writer", "services/auditor", "training", "bench"]
+members = ["packages/*", "services/generator", "services/scorer", "services/latency", "services/profile_builder", "services/feature_writer", "services/auditor", "training", "bench", "backtest"]
 
 [tool.uv.sources]
 fraudcore = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "grpcio-tools>=1.66", "import-linter>=2.0", "onnx>=1.16"]
+dev = ["moto[s3]>=5", "pytest>=8", "ruff>=0.6", "grpcio-tools>=1.66", "import-linter>=2.0", "onnx>=1.16"]
 
 [tool.ruff]
 line-length = 110
@@ -30,5 +30,5 @@ known-first-party = ["fraudcore"]
 
 [tool.pytest.ini_options]
 markers = ["integration: needs the docker stack (make up); skipped when it is not running"]
-testpaths = ["packages/fraudcore/tests", "services", "training", "tests"]
+testpaths = ["packages/fraudcore/tests", "services", "training", "bench", "backtest", "tests"]
 addopts = "--import-mode=importlib"
