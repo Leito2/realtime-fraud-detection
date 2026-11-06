@@ -156,6 +156,75 @@ The scorer polls that alias every 5 seconds, downloads the new version, **refuse
 `fraudcore.FEATURE_ORDER`, and swaps it with a single reference assignment: a batch is scored entirely by the old or entirely by
 the new model, and each decision records which one. Every downloaded version is cached on disk, so the scorer keeps running if MLflow is down or restarts.
 Until a champion exists the scorer serves the rules fallback.
+
+### Shadow challenger, promotion and the drift demo
+A challenger (a retrained XGBoost or the PyTorch MLP, `make train-challenger`) never touches a decision. It runs in its own
+consumer group, scores the same enriched events, and writes its scores to a separate topic, so it can be slow or dead without
+moving the champion's p95 (ADR-0008). The auditor joins both models' scores with the labels that arrive later and
+`make promote` moves the `champion` alias only if the challenger meets written criteria. The criteria compare the two models at the
+**same flag rate**: a model that looks better only because it flags more customers is not better.
+
+`make drift-demo` runs the whole loop against the live stack: (A) steady traffic, (B) a new fraud pattern the champion never
+saw, (C) a retrain from the feedback labels runs as challenger in shadow, (D) promotion and recovery.
+
+| phase | champion | frauds | recall | new-pattern recall | legit flagged |
+|---|---|---|---|---|---|
+| A steady | v7 | 24 | 66.7% | - | 9.2% |
+| B new pattern | v7 | 112 | 50.0% | 46.9% (38/81) | 9.0% |
+| C champion vs challenger | v7 (challenger v8 in shadow) | 88 | 35.2% | 25.0% (15/60) | 8.5% |
+| D new champion | v8 | 51 | 51.0% | 59.4% (19/32) | 6.3% |
+
+The challenger caught 51.1% in shadow against 35.2% for the champion on the same events, the criteria were met (recall gain
++0.159), and after the alias moved the new-pattern recall went from 25.0% to 59.4% without restarting anything. Two honest
+caveats. The sample is small (tens of frauds per phase), so read the direction, not the decimals. And the live "legit flagged"
+column (6-9%) is far above the 1% false-positive rate of the offline evaluation: the demo's traffic regime (few users, high
+fraud share, cold profiles) is not the 60-day history the thresholds were chosen on. The lesson of the demo is the mechanism,
+not a recall figure.
+
+### Backtesting on a versioned data lake
+Training histories and backtest datasets live in an S3-compatible bucket with versioning, next to a manifest that records the
+SHA-256, row count and schema of every object. (PLAN named MinIO; MinIO stopped publishing images and binaries in 2025, so the
+`s3` service is SeaweedFS behind the same API, and nothing in the code depends on that choice.) `make datalake` uploads a
+dataset, `make backtest` replays a registered model over it from a container, and `make drift-report` runs an Evidently report
+over a reference window and a current window.
+
+A backtest is a table per model and per fraud scenario, not a single number. The first one compared champion v3 (XGBoost) with
+challenger v4 (a small PyTorch MLP) on the same 10 held-out days:
+
+| segment | metric | champion | challenger |
+|---|---|---|---|
+| overall | PR-AUC | 0.590 | 0.594 |
+| overall | recall @ 1% FPR | 0.674 | 0.668 |
+| atypical_amount | recall | 0.560 | 0.040 |
+| geo_jump | recall | 0.320 | 0.420 |
+| burst | recall | 0.609 | 0.658 |
+
+The aggregate says "equal". The scenario rows say the challenger has forgotten one kind of fraud (unusually large or small
+amounts) and learned another better. That is the reason promotion looks at segments and at live shadow results, not only at PR-AUC.
+
+### Explanations: XGBoost decides, the LLM words it
+A score of 0.87 is not something an analyst can act on. The explainer consumes `decisions`, keeps `REVIEW` and `BLOCK`, and
+produces a short text saying why. The division of labour is strict:
+
+1. **Facts come from the model.** XGBoost's own `pred_contribs` gives exact TreeSHAP values for the booster that made the decision
+   (the ONNX graph cannot, so training registers the native booster next to it). The top 5 become the only facts.
+2. **The LLM only phrases them.** The prompt contains those facts and nothing else; the model never sees the payment.
+3. **A gate checks the wording.** Every number in the text must match a fact (10% tolerance) and no feature outside the top 5 may be
+   named. A text that fails is replaced by a deterministic template built from the same facts, and counted in `explanations_rejected_total`.
+
+It is a best-effort side path, so every way of failing has a defined outcome instead of lag: more than 2 explanations in flight or
+a decision older than 30 s is `skipped`; an LLM error or an open circuit breaker (3 failures, 20 s cooldown) is a `template`; a
+model without a native booster (the MLP) is a `template` that says no attribution exists. Delivery is at-most-once; the decision
+had already shipped. The scorer must log features for the decisions it flags (`LOG_FEATURES=flagged`, or `1` for everything).
+
+On the live stack with the free `mock` provider, 90 s of traffic produced 67 `llm`, 1 `skipped` (the first call, while the booster
+was being fetched) and 1 `template` explanation; with the LLM endpoint unreachable the same traffic produced templates (and a few
+`skipped` while the breaker was open) and the pipeline did not notice. `uv run explainer-audit` re-derives the facts of stored LLM
+explanations and counts unsupported claims: 0 of 67 for `mock`, which is faithful by construction, so that number says the audit
+works, not that a real model is faithful. The rate for a real model (Ollama) belongs to the measurement phase. Dashboard D5 shows
+explanations by status, LLM latency, shed share and explainer lag; `GET /decisions/{payment_id}` on the admin API returns the
+decision with its label and explanation for a dispute.
+
 ## Part IV — Proof (how we measure, results E1–E10, bottleneck analysis, observability, resilience F1–F10)
 
 ### How we measure

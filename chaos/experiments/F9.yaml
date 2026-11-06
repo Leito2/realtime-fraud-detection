@@ -1,0 +1,13 @@
+id: F9
+title: Overload burst, twice the steady rate for 60 s
+hypothesis: >-
+  The consumer lag grows without any component dying, nothing is lost, and the system returns to its normal
+  latency within two minutes after the burst ends.
+mechanism: Kafka as the buffer between stages; no load shedding on payments (PLAN 7.4).
+rate: 300
+fault_at_s: 60
+observe_s: 180
+fault: { type: overload, rate: 300, duration_s: 60 }
+expect:
+  lost_max: 0
+  recovery_s_max: 150

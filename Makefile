@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 PROFILE ?= core
-.PHONY: datalake backtest drift-report drift-demo help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train train-challenger promote history trace-up shadow
+.PHONY: proto datalake backtest drift-report drift-demo help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train train-challenger promote history trace-up shadow
 
 help:      ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
@@ -18,6 +18,8 @@ logs:      ## Tail logs
 	docker compose logs -f --tail=100
 test:      ## Unit + contract tests
 	uv run pytest -q
+proto:     ## Regenerate the gRPC Python stubs from proto/fraud/v1/scoring.proto
+	uv run python -m grpc_tools.protoc -I proto --python_out=packages/fraudproto/src --grpc_python_out=packages/fraudproto/src --pyi_out=packages/fraudproto/src proto/fraud/v1/scoring.proto
 lint:      ## Lint + dependency rule (ADR-0002)
 	uv run ruff check .
 	uv run lint-imports --config services/scorer/pyproject.toml
@@ -53,5 +55,5 @@ drift-demo:  ## The whole online MLOps loop: new fraud pattern, retrain, shadow,
 	uv run python scripts/drift_demo.py $(DEMO_ARGS)
 bench:     ## Load protocol E1 (rate steps x3, p95/p99, sustained throughput); BENCH_ARGS to override
 	uv run python -m fraud_bench.run e1 $(BENCH_ARGS)
-chaos:     ## Implemented in a later milestone (PLAN.md §11)
-	@echo "'$@' arrives in a later milestone — see PLAN.md §11"; exit 1
+chaos:     ## Failure experiment with a written hypothesis: make chaos EXP=F1 (report in docs/resilience/)
+	uv run chaos $(EXP)

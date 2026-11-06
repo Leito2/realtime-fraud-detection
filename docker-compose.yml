@@ -55,6 +55,7 @@ services:
     <<: *core
     image: fraud/flink:local
     command: taskmanager
+    restart: unless-stopped       # the orchestrator that brings a killed worker back (F1)
     environment: { JOB_MANAGER_RPC_ADDRESS: jobmanager }
     depends_on:
       jobmanager: { condition: service_healthy }
@@ -76,6 +77,7 @@ services:
 
   redis:
     <<: *core
+    restart: unless-stopped
     image: redis:8
     command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction", "--save", "", "--appendonly", "no"]
     ports: ["6379:6379"]
@@ -150,6 +152,23 @@ services:
     ports: ["8333:8333"]
     mem_limit: 300m
 
+  # Fault injection (PLAN.md 7.2): the scorer can reach Redis through this proxy to make it slow or refuse.
+  toxiproxy:
+    profiles: ["chaos", "ops"]
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    volumes: ["./infra/toxiproxy/toxiproxy.json:/config/toxiproxy.json:ro"]
+    ports: ["8474:8474"]
+    mem_limit: 64m
+
+  # An OpenAI-compatible endpoint that answers instantly: the "LLM" that F8 kills.
+  llm-stub:
+    profiles: ["chaos"]
+    image: fraud/app:local
+    entrypoint: ["python", "/stub/llm_stub.py"]
+    volumes: ["./chaos/llm_stub.py:/stub/llm_stub.py:ro"]
+    mem_limit: 64m
+
   grafana:
     profiles: ["ops", "explain"]
     image: grafana/grafana:11.6.0
@@ -177,7 +196,7 @@ services:
     environment:
       BOOTSTRAP: "kafka:29092"
       CONFIG_DIR: /app/config
-      REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "${SCORER_REDIS_URL:-redis://redis:6379/0}"      # F4 points it at Toxiproxy
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"      # set by `make trace-up`
       BATCH_MAX_MESSAGES: "${BATCH_MAX_MESSAGES:-}"      # experiment E2 overrides config/scorer.yaml
@@ -230,6 +249,44 @@ services:
     restart: unless-stopped
     mem_limit: 150m
 
+  # Synchronous scoring (PLAN.md 14): gRPC on :50051 and REST on :8000, one wiring, same model runtime.
+  scoring-grpc:
+    profiles: ["grpc", "ops"]
+    image: fraud/app:local
+    command: ["scorer", "--mode", "grpc"]
+    environment:
+      BOOTSTRAP: "kafka:29092"
+      CONFIG_DIR: /app/config
+      REDIS_URL: "redis://redis:6379/0"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      POSTGRES_DSN: "postgresql://fraud:fraud@postgres:5432/fraud"
+      MODEL_CACHE_DIR: /cache-grpc
+      GRPC_API_KEY: "${GRPC_API_KEY:-}"
+    volumes: ["./config:/app/config:ro", "model-cache-grpc:/cache-grpc"]
+    ports: ["50051:50051"]
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    mem_limit: 300m
+
+  api:
+    profiles: ["grpc", "ops"]
+    image: fraud/app:local
+    entrypoint: ["api"]
+    environment:
+      BOOTSTRAP: "kafka:29092"
+      CONFIG_DIR: /app/config
+      REDIS_URL: "redis://redis:6379/0"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      POSTGRES_DSN: "postgresql://fraud:fraud@postgres:5432/fraud"
+      MODEL_CACHE_DIR: /cache-api
+    volumes: ["./config:/app/config:ro", "model-cache-api:/cache-api"]
+    ports: ["8000:8000"]
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    mem_limit: 300m
+
   # Async path (PLAN.md 3.10): reads flagged decisions, may be slow or down without touching decisions.
   # Needs the scorer to log features for flagged decisions: LOG_FEATURES=flagged on the scorer service.
   explainer:
@@ -251,6 +308,13 @@ services:
     mem_limit: 300m
 
   # Run-to-completion tools: docker compose --profile tools run --rm generator --rate 2000 --duration 30
+  e11:
+    profiles: ["tools"]
+    image: fraud/app:local
+    entrypoint: ["python", "-m", "fraud_bench.e11"]
+    volumes: ["./docs/results:/results"]
+    mem_limit: 512m
+
   generator:
     profiles: ["tools"]
     image: fraud/app:local
@@ -294,4 +358,6 @@ volumes:
   tempo-data: {}
   model-cache: {}
   model-cache-shadow: {}
+  model-cache-grpc: {}
+  model-cache-api: {}
   s3-data: {}

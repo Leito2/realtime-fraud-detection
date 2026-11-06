@@ -1,0 +1,18 @@
+id: F8
+title: The LLM endpoint dies
+hypothesis: >-
+  The explainer falls back to the deterministic template, the explanations keep coming, and the critical path
+  does not notice: p95 and loss are unchanged.
+mechanism: Circuit breaker around the LLM call plus the template built from the same SHAP facts; the explainer is an independent consumer group.
+rate: 400
+fault_at_s: 60
+observe_s: 120
+needs: [llm-stub, explainer]
+recreate: [explainer, scorer]
+env: { LLM_PROVIDER: ollama, LLM_BASE_URL: "http://llm-stub:8000/v1", LOG_FEATURES: flagged }
+fault: { type: kill, service: llm-stub }
+expect:
+  lost_max: 0
+  gap_s_max: 5
+  p95_after_ms_max: 80
+  template_share_min: 0.8

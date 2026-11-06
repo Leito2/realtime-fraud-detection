@@ -1,0 +1,14 @@
+id: F6b
+title: Poison pills in the enriched topic
+hypothesis: >-
+  Malformed records that reach payments-enriched (past Flink) are routed to the DLQ by the scorer, which keeps
+  scoring: no valid payment is lost and the decision stream has no gap.
+mechanism: The scorer validates every enriched event against the contract and publishes the raw bytes of the invalid ones to the dlq topic.
+rate: 400
+fault_at_s: 60
+observe_s: 90
+fault: { type: poison, topic: payments-enriched, count: 500 }
+expect:
+  lost_max: 0
+  gap_s_max: 5
+  dlq_growth_min: 500

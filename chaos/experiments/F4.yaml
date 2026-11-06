@@ -1,0 +1,17 @@
+id: F4
+title: Redis answers 20 ms late
+hypothesis: >-
+  The 5 ms timeout cuts the slow lookups and the scorer falls back to the degraded policy, so the p95 stays
+  inside the 80 ms budget while Redis is slow.
+mechanism: Socket timeout shorter than the latency budget; the slow dependency costs at most the timeout, never its own latency.
+rate: 400
+fault_at_s: 60
+observe_s: 120
+needs: [toxiproxy]
+recreate: [scorer]
+env: { SCORER_REDIS_URL: "redis://toxiproxy:6380/0" }
+fault: { type: toxic, proxy: redis, kind: latency, attributes: { latency: 20 }, duration_s: 60 }
+expect:
+  lost_max: 0
+  p95_after_ms_max: 80
+  degraded_min: 0.2

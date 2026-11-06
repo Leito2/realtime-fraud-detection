@@ -1357,7 +1357,7 @@ Revisión completa del plan con el usuario, pregunta por pregunta, antes de impl
 | 31 | Lenguaje | Python; Go se decide en D3 con datos | §11.4 |
 | 32 | Código | Servicios orientados a eventos; Clean Architecture en `scorer` y `explainer` | ADR-0002 |
 
-## 16. Hallazgos de implementación (M3-M5)
+## 16. Hallazgos de implementación (M3-M7)
 
 Cosas que la implementación enseñó y que cambian o precisan el plan. Las cifras están en `docs/results/` y en el README.
 
@@ -1371,5 +1371,13 @@ Cosas que la implementación enseñó y que cambian o precisan el plan. Las cifr
 | H6 | `kafka-exporter` v1.9.0 funciona con Kafka en modo KRaft. | Casilla del §10 verificada. |
 | H7 | **La medición se invalida con otra carga en el mismo equipo** (un juego abierto llevó el p50 de 16 ms a 1 s y la regla de validez de `gen_lag` lo detectó). | Los números de E1-E3 se toman con el equipo en reposo; los de M1 se conservan, los contaminados se descartan. |
 | H8 | El histórico offline se guarda en Parquet local con SHA-256 en cada corrida de MLflow. MinIO (manifiesto versionado) se difiere a M6b, donde el backtesting lo necesita de verdad. | Desviación consciente del criterio de M3. |
+| H9 | **La demo de drift solo funciona si el tráfico en vivo se parece al de entrenamiento**: con usuarios casi uniformes y la intensidad por usuario distinta, `f_cnt_10m` y el z-score del perfil se desplazan y el champion marcaba ~40% de los pagos legítimos. | El generador en vivo tiene `--zipf` y la demo usa 6 ev/s, 20 000 usuarios y perfiles cargados desde `history_full`. Un cambio de régimen de tráfico es drift de verdad, pero no es el drift que se quiere demostrar. |
+| H10 | **MinIO ya no publica imágenes ni binarios** (Docker Hub, quay y dl.min.io fallan). | El almacén S3 es SeaweedFS detrás de la misma API; el manifiesto con SHA-256 y el versionado no dependen del servidor. |
+| H11 | **Comparar champion y challenger exige el mismo punto de operación**: el challenger reentrenado ganaba +27 puntos de recall pero con +6.2 puntos de FPR en *sus* umbrales, y el criterio de promoción lo rechazaba con razón. | `retrain --match-flag-rate auto` elige los umbrales del challenger para que marque la misma fracción que el champion en línea, medida sobre la parte de validación del feedback. |
+| H12 | **Una métrica agregada esconde regresiones por escenario**: en el backtest el MLP empata en PR-AUC (0.594 vs 0.590) pero su recall en `atypical_amount` es 0.04 contra 0.56. | El backtest reporta por escenario y la promoción no se decide solo con PR-AUC. |
+| H13 | **El grafo ONNX no da SHAP**, y las versiones registradas antes de M7 no traen el booster nativo. | `train`/`retrain` registran `booster.json`; sin él el explainer responde con una plantilla que lo dice. Se descubrió en vivo con el champion v3. |
+| H14 | Evidently no funciona con pandas 3. | `pandas<3` en `backtest/`. |
+| H15 | **`--trials 0` no es el champion documentado**: PR-AUC 0.568 y recall@1% FPR 0.643, contra 0.590 y 0.674 con la búsqueda de hiperparámetros. | Los números oficiales de `docs/results/m3-offline-eval.json` salen de una corrida completa; las corridas rápidas son para desarrollo. |
+| H16 | Con la misma semilla, el generador repite los `payment_id` y el auditor (`ON CONFLICT DO NOTHING`) descarta las repeticiones. Se vio como decisiones "viejas" tras una corrida nueva. | Cada corrida de prueba usa un `--stream-seed` distinto. |
 
 **Siguiente paso:** M6 · MLOps online (§11.3).

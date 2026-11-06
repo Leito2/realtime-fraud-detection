@@ -1,0 +1,13 @@
+id: F5
+title: The Kafka broker restarts
+hypothesis: >-
+  With one broker the pipeline stops while it is down. The generator buffers and retries, the system catches up
+  afterwards, and no payment is lost.
+mechanism: Idempotent producer with retries and a producer-side buffer; consumers resume from committed offsets; Flink restarts from its checkpoint.
+rate: 300
+fault_at_s: 60
+observe_s: 180
+fault: { type: stop, service: kafka, down_s: 20 }
+expect:
+  lost_max: 0
+  recovery_s_max: 120
