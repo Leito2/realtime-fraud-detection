@@ -86,3 +86,21 @@ def test_background_thread_swaps_without_blocking_predictions(make_onnx):
         assert m.predict(X).version == "3"
     finally:
         m.stop()
+
+
+def test_thresholds_published_with_the_model_reach_the_prediction(make_onnx):
+    reg = FakeRegistry(make_onnx)
+    m = model_with(reg)
+    reg.versions["1"] = RegisteredModel(make_onnx(0.1), list(FEATURE_ORDER), {"review": 0.4, "block": 0.9})
+    reg.alias = "1"
+    m.refresh()
+    th = m.predict(X).thresholds
+    assert (th.name, th.review, th.block) == ("fraud-champion-v1", 0.4, 0.9)
+
+
+def test_models_without_thresholds_leave_the_configured_ones_in_charge(make_onnx):
+    reg = FakeRegistry(make_onnx)
+    m = model_with(reg)
+    reg.publish("1", 0.1)
+    m.refresh()
+    assert m.predict(X).thresholds is None

@@ -51,3 +51,18 @@ def test_profile_outage_marks_degraded_and_applies_the_conservative_policy():
 def test_empty_batch_does_nothing():
     uc, store, model, sink = build([])
     assert uc([]) == [] and store.calls == 0 and not model.batches and sink.batches == 0
+
+
+def test_thresholds_travel_with_the_model_and_win_over_the_configured_ones():
+    import numpy as np
+    from scorer.application.ports import Prediction
+
+    class ModelWithOwnThresholds(FakeModel):
+        def predict(self, X):
+            return Prediction(np.array(self.scores[: len(X)]), "m", "7", Thresholds("m-v7", 0.05, 0.5))
+
+    uc, *_ = build([0.1, 0.6])
+    uc.model = ModelWithOwnThresholds([0.1, 0.6])
+    out = uc([event("a"), event("b", "u_2")])
+    assert [d.decision for d in out] == ["REVIEW", "BLOCK"]  # configured 0.3/0.8 would differ
+    assert {d.threshold_set for d in out} == {"m-v7"}

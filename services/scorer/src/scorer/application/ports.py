@@ -9,6 +9,7 @@ from typing import NamedTuple, Protocol
 import numpy as np
 
 from fraudcore.contracts import DecisionEvent
+from fraudcore.thresholds import Thresholds
 
 
 class ProfileUnavailable(Exception):
@@ -25,6 +26,7 @@ class Prediction(NamedTuple):
     scores: np.ndarray
     model: str
     version: str
+    thresholds: Thresholds | None = None      # published with the model; None = use the configured ones
 
 
 class ModelRuntime(Protocol):

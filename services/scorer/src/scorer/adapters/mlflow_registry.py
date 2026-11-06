@@ -13,6 +13,10 @@ from mlflow.exceptions import MlflowException
 from scorer.adapters.hot_swap import RegisteredModel
 
 
+def _read_json(path: Path) -> dict | None:
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
 class MlflowRegistry:
     def __init__(self, tracking_uri: str, model_name: str, alias: str, cache_dir: Path | None = None) -> None:
         self._client = mlflow.MlflowClient(tracking_uri=tracking_uri, registry_uri=tracking_uri)
@@ -38,7 +42,8 @@ class MlflowRegistry:
             local = Path(mlflow.artifacts.download_artifacts(artifact_uri=mv.source, dst_path=tmp,
                                                              tracking_uri=self._uri))
             model = RegisteredModel((local / "model.onnx").read_bytes(),
-                                    json.loads((local / "features.json").read_text(encoding="utf-8")))
+                                    json.loads((local / "features.json").read_text(encoding="utf-8")),
+                                    _read_json(local / "thresholds.json"))
         self._write_cache(version, model)
         return model
 
@@ -56,7 +61,8 @@ class MlflowRegistry:
         if not (d / "model.onnx").exists() or not (d / "features.json").exists():
             return None
         return RegisteredModel((d / "model.onnx").read_bytes(),
-                               json.loads((d / "features.json").read_text(encoding="utf-8")))
+                               json.loads((d / "features.json").read_text(encoding="utf-8")),
+                               _read_json(d / "thresholds.json"))
 
     def _write_cache(self, version: str, model: RegisteredModel) -> None:
         if not self._cache:
@@ -64,4 +70,6 @@ class MlflowRegistry:
         d = self._cache / version
         d.mkdir(parents=True, exist_ok=True)
         (d / "features.json").write_text(json.dumps(model.features), encoding="utf-8")
+        if model.thresholds:
+            (d / "thresholds.json").write_text(json.dumps(model.thresholds), encoding="utf-8")
         (d / "model.onnx").write_bytes(model.onnx_bytes)       # written last: marks a complete entry

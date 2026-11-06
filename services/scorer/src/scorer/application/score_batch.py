@@ -48,12 +48,13 @@ class ScoreBatch:
         prediction = self.model.predict(X)
         now = self.clock.now_ns()                 # t_decided: the model has spoken
         t2 = now
-        applied = self.policy.thresholds if degraded else self.thresholds
+        own = prediction.thresholds or self.thresholds          # a model carries the cutoffs it was tuned for
+        applied = self.policy.thresholds if degraded else own
 
         decisions = []
         for e, s in zip(events, prediction.scores, strict=True):
             score = float(s)
-            decision = self.policy.decide(score, e.amount) if degraded else self.thresholds.decide(score)
+            decision = self.policy.decide(score, e.amount) if degraded else own.decide(score)
             decisions.append(DecisionEvent(
                 payment_id=e.payment_id, user_id=e.user_id, decision=decision, score=score,
                 model=prediction.model, model_version=prediction.version, threshold_set=applied.name,

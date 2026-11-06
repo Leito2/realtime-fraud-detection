@@ -12,6 +12,7 @@ from typing import Protocol
 import numpy as np
 
 from fraudcore.features import FEATURE_ORDER
+from fraudcore.thresholds import Thresholds
 from scorer.adapters.onnx_model import OnnxModel
 from scorer.application.ports import ModelRuntime, Prediction
 
@@ -22,6 +23,7 @@ log = logging.getLogger("scorer.hot_swap")
 class RegisteredModel:
     onnx_bytes: bytes
     features: list[str]
+    thresholds: dict | None = None            # {'review': x, 'block': y}, tuned for this model's scores
 
 
 class ModelRegistry(Protocol):
@@ -57,7 +59,11 @@ class HotSwapModel:
             self._rejected.add(version)
             return False
         try:
-            model = OnnxModel(loaded.onnx_bytes, self._name, version, self._threads)
+            thresholds = None
+            if loaded.thresholds:
+                cut = loaded.thresholds
+                thresholds = Thresholds(f"{self._name}-v{version}", cut["review"], cut["block"])
+            model = OnnxModel(loaded.onnx_bytes, self._name, version, self._threads, thresholds)
         except Exception:
             log.exception("model v%s could not be loaded; refusing it", version)
             self._rejected.add(version)
