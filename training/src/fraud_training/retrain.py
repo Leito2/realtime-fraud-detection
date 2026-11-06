@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from fraud_training.costs import choose_thresholds
+from fraud_training.costs import choose_thresholds, match_flag_rate
 from fraud_training.dataset import build_dataset, temporal_split
 from fraud_training.metrics import pr_auc, recall_at_fpr
 from fraud_training.models import OnnxScorer, check_parity, fit_model, native_scores, to_onnx
@@ -43,8 +43,19 @@ def fetch_feedback(dsn: str) -> list[tuple[dict, bool, object]]:
         return conn.execute("SELECT features, is_fraud, decided_at FROM v_feedback_dataset").fetchall()
 
 
+def fetch_flag_rate(dsn: str) -> float:
+    """Share of labelled, feature-logged decisions the champion flagged (REVIEW or BLOCK) online."""
+    import psycopg
+
+    with psycopg.connect(dsn) as conn:
+        (rate,) = conn.execute("SELECT avg((d.decision <> 'APPROVE')::int)::float FROM decisions d "
+                               "JOIN labels l USING (payment_id) WHERE d.features IS NOT NULL").fetchone()
+    return float(rate)
+
+
 def retrain(s: Settings, rows, *, min_fraud: int = 30, use_history: bool = True, kind: str = "xgboost",
-            alias: str = "challenger", valid_share: float = 0.25) -> dict:
+            alias: str = "challenger", valid_share: float = 0.25,
+            match_flag_rate_to: float | None = None) -> dict:
     X, y = feedback_arrays(rows)
     if int(y.sum()) < min_fraud:
         raise NotEnoughFeedback(f"{int(y.sum())} labelled frauds in the feedback, need at least {min_fraud}")
@@ -65,12 +76,15 @@ def retrain(s: Settings, rows, *, min_fraud: int = 30, use_history: bool = True,
     onnx = OnnxScorer(blob).predict(Xva)
     max_diff = check_parity(native, onnx)                                  # the registry gate
     t = choose_thresholds(onnx, yva, Xva[:, FEATURE_ORDER.index("amount")], s.costs, s.max_review_rate)
+    if match_flag_rate_to is not None:
+        # Equal workload to the champion, on the live-regime slice only (the feedback validation rows).
+        t = match_flag_rate(onnx[-(len(y) - cut):], match_flag_rate_to, t)
     thresholds = {"review": t.review, "block": t.block}
     metrics = {"pr_auc": pr_auc(yva, onnx), "recall_at_fpr_1pct": recall_at_fpr(yva, onnx, 0.01),
                "onnx_max_abs_diff": max_diff, "train_rows": int(len(ytr)), "valid_rows": int(len(yva))}
     source = "feedback+history" if use_history else "feedback"
     result = {"model": kind, "source": source, "metrics": metrics, "onnx_max_abs_diff": max_diff,
-              "thresholds": thresholds}
+              "thresholds": thresholds, "matched_flag_rate": match_flag_rate_to}
     if s.register:
         version = register_model(
             tracking_uri=s.tracking_uri, artifact_root=s.artifact_root, experiment=s.experiment,
@@ -93,11 +107,18 @@ def main() -> None:
     default_dsn = os.environ.get("POSTGRES_DSN", "postgresql://fraud:fraud@localhost:5432/fraud")
     ap.add_argument("--dsn", default=default_dsn)
     ap.add_argument("--min-fraud", type=int, default=30)
+    ap.add_argument("--match-flag-rate", default=None, metavar="auto|FLOAT",
+                    help="choose thresholds so the challenger flags the same share as the champion online "
+                         "(auto: read it from the audit store); makes the promotion comparison fair")
     a = ap.parse_args()
     s = replace(Settings(), history=a.history, tracking_uri=a.tracking_uri)
     rows = fetch_feedback(a.dsn)
     print(f"{len(rows)} feedback rows", flush=True)
-    result = retrain(s, rows, min_fraud=a.min_fraud, use_history=not a.no_history)
+    rate = None
+    if a.match_flag_rate is not None:
+        rate = fetch_flag_rate(a.dsn) if a.match_flag_rate == "auto" else float(a.match_flag_rate)
+        print(f"matching the champion's online flag rate: {rate:.3%}", flush=True)
+    result = retrain(s, rows, min_fraud=a.min_fraud, use_history=not a.no_history, match_flag_rate_to=rate)
     m = result["metrics"]
     print(f"{result['model']} ({result['source']})  PR-AUC {m['pr_auc']:.3f}  recall@1%FPR "
           f"{m['recall_at_fpr_1pct']:.3f}  onnx max|diff| {m['onnx_max_abs_diff']:.2e}")

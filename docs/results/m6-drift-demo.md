@@ -2,8 +2,10 @@
 
 | phase | champion | frauds | recall | new-pattern recall | legit flagged | challenger recall |
 |---|---|---|---|---|---|---|
-| A steady | fraud-champion:3..fraud-champion:3 | 24 | 58.3% | - | 4.9% | 62.5% |
-| B new pattern | fraud-champion:3..fraud-champion:3 | 112 | 46.4% | 45.7% (37/81) | 8.6% | 48.2% |
-| C champion vs challenger | fraud-champion:3..fraud-champion:3 | 88 | 42.0% | 31.7% (19/60) | 11.3% | 69.3% |
+| A steady | fraud-champion:7..fraud-champion:7 | 24 | 66.7% | - | 9.2% | 75.0% |
+| B new pattern | fraud-champion:7..fraud-champion:7 | 112 | 50.0% | 46.9% (38/81) | 9.0% | 86.6% |
+| C champion vs challenger | fraud-champion:7..fraud-champion:7 | 88 | 35.2% | 25.0% (15/60) | 8.5% | 51.1% |
+| D new champion | fraud-champion:8..fraud-champion:8 | 51 | 51.0% | 59.4% (19/32) | 6.3% | 51.0% |
 
-criteria: FPR rises by 0.062, limit 0.005 (recall gain +0.273)
+criteria: criteria met (recall gain +0.159)
+fraud-champion: champion v7 -> v8

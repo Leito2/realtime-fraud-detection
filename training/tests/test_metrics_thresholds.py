@@ -52,3 +52,24 @@ def test_choose_thresholds_beats_do_nothing_and_respects_review_capacity():
     assert chosen < expected_cost(scores, y, amount, 1.1, 1.1, COSTS)   # never flag anything
     review_rate = float(((scores >= t.review) & (scores < t.block)).mean())
     assert review_rate <= 0.05
+
+
+def test_flag_rate_matching_puts_the_review_threshold_at_the_target_share():
+    from fraud_training.costs import match_flag_rate
+
+    from fraudcore.thresholds import Thresholds
+
+    scores = np.linspace(0, 1, 1001)
+    t = match_flag_rate(scores, 0.10, Thresholds("cost", 0.5, 0.9))
+    assert abs((scores >= t.review).mean() - 0.10) < 0.005
+    assert t.block > t.review
+
+
+def test_flag_rate_matching_never_puts_block_below_review():
+    from fraud_training.costs import match_flag_rate
+
+    from fraudcore.thresholds import Thresholds
+
+    scores = np.linspace(0, 1, 1001)
+    t = match_flag_rate(scores, 0.02, Thresholds("cost", 0.5, 0.6))     # 2% flagged -> review ~0.98
+    assert t.block > t.review >= 0.97

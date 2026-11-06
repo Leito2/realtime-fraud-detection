@@ -53,3 +53,13 @@ def choose_thresholds(scores: np.ndarray, y: np.ndarray, amount: np.ndarray, cos
     if not np.isfinite(best[0]):
         raise ValueError("no threshold pair satisfies the review-rate cap")
     return Thresholds(name, float(cands[best[1]]), float(cands[best[2]]))
+
+
+def match_flag_rate(scores: np.ndarray, flag_rate: float, cost_optimal: Thresholds) -> Thresholds:
+    """Operating point with the same flagged share as another model: ``review`` is the score quantile that
+    flags ``flag_rate`` of the payments. Needed to compare a challenger with the champion at equal workload:
+    recall at different flag rates says nothing (PLAN.md 16, H11). ``block`` keeps its cost-optimal value
+    unless that would not be above ``review``."""
+    review = float(np.quantile(scores, 1.0 - flag_rate))
+    block = cost_optimal.block if cost_optimal.block > review else review + (1.0 - review) / 2
+    return Thresholds(f"{cost_optimal.name}@flag-rate", review, block)

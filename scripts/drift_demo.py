@@ -125,7 +125,7 @@ def main() -> None:
     print(table(phases), flush=True)
 
     print("retrain from the feedback dataset", flush=True)
-    out = run(["uv", "run", "retrain", "--min-fraud", "20"]).stdout
+    out = run(["uv", "run", "retrain", "--min-fraud", "20", "--match-flag-rate", "auto"]).stdout
     print(out, flush=True)
     time.sleep(15)                                          # the shadow scorer polls the alias every 5 s
 

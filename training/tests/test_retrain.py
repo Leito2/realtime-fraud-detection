@@ -58,3 +58,13 @@ def test_retrain_registers_a_verified_challenger_from_history_plus_feedback(hist
     assert str(mv.version) == result["registry"]["version"]
     assert mv.tags["source"] == "feedback+history" and int(mv.tags["feedback_rows"]) == 3000
     assert result["onnx_max_abs_diff"] < 1e-5
+
+
+def test_matching_the_flag_rate_keeps_a_valid_threshold_pair(history, tmp_path):
+    path = tmp_path / "history.parquet"
+    history.write_parquet(path)
+    s = Settings(history=path, register=False, valid_days=3, test_days=3, results_out=tmp_path / "r.json",
+                 max_review_rate=0.05)
+    result = retrain(s, fake_feedback(history), min_fraud=10, use_history=True, match_flag_rate_to=0.04)
+    th = result["thresholds"]
+    assert 0 <= th["review"] < th["block"] <= 1 and result["matched_flag_rate"] == 0.04
