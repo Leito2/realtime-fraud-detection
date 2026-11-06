@@ -1,4 +1,4 @@
-"""Local data lake on MinIO (S3 API) with object versioning and a content-hash manifest (PLAN.md 13.1).
+"""Local data lake on an S3-compatible store: object versioning and a content-hash manifest (PLAN.md 13.1).
 
 Layout: ``training/`` (histories), ``features/``, ``raw/`` and ``reports/``. Every ``publish`` creates a
 new object version plus a manifest object (``<key>.manifest.json``) holding the SHA-256, so a backtest can
@@ -18,7 +18,7 @@ def client_from_env(env: dict):
     import boto3
 
     return boto3.client(
-        "s3", endpoint_url=env.get("S3_ENDPOINT", "http://localhost:9000"),
+        "s3", endpoint_url=env.get("S3_ENDPOINT", "http://localhost:8333"),
         aws_access_key_id=env.get("S3_ACCESS_KEY", "fraud"),
         aws_secret_access_key=env.get("S3_SECRET_KEY", "fraudfraud"), region_name="us-east-1")
 

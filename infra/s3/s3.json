@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "fraud",
+      "credentials": [{ "accessKey": "fraud", "secretKey": "fraudfraud" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

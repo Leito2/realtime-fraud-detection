@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Versioned data lake (MinIO), containerised backtests and drift reports (PLAN.md section 13, M6b)."
 requires-python = ">=3.12"
 dependencies = [
-    "fraudcore", "training", "boto3>=1.35", "pandas>=2.2", "polars>=1.0", "numpy>=1.26", "pyarrow>=16",
+    "fraudcore", "training", "boto3>=1.35", "pandas>=2.2,<3", "polars>=1.0", "numpy>=1.26", "pyarrow>=16",
     "mlflow-skinny>=2.16", "onnxruntime>=1.19", "evidently>=0.7", "psycopg[binary]>=3.2", "pyyaml>=6",
 ]
 
