@@ -120,4 +120,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Windows consoles default to cp1252, which cannot print "—" or "≥".
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

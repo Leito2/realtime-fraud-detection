@@ -51,3 +51,25 @@ Event-driven services at the system level; **Clean Architecture inside `scorer` 
 Config lives in YAML/`.env`, not code: `config/scorer.yaml` (micro-batch size/wait, ONNX threads, Redis timeout, model alias), `config/thresholds.yaml`, `config/experiments/E1.yaml`, `.env.example`. Compose services have hard `mem_limit`s sized for an 8 GB laptop (WSL2 ~5 GB); keep new services within the budget in PLAN §8. The `explain` profile references a sibling `../llm-gateway` project (P0) outside this repo.
 
 Definition of done for milestones (PLAN §11.2): CI green, affected profile runs in 8 GB without `OOMKilled`, README sections written, config in YAML/`.env`, $0 spent (`LLM_PROVIDER=mock|ollama` only).
+
+## CV results template (fill at M10 with measured numbers only)
+
+Every placeholder must come from a reproducible experiment (PLAN §5.10). If a target is missed, publish the real number plus the bottleneck. Don't use estimated values.
+
+* **Real-time fraud scoring pipeline** (Kafka → Flink SQL windowed features → Redis online store → XGBoost on ONNX Runtime) sustaining **`[X]k` events/s at `[Y]` ms p95 end to end** on a single 8 GB laptop. Latency was measured open-loop and corrected for coordinated omission; the bottleneck was identified as `[Flink / scorer CPU / Kafka]`.
+* **Model serving and lifecycle:** XGBoost exported to ONNX (**`[Z]×` faster** than native inference, output parity < 1e-5). It beats a rules baseline at **`[R]`% recall at 1% FPR** (PR-AUC `[A]` vs `[B]`). A PyTorch challenger runs in shadow mode with **no measurable impact on champion p95**, and hot model swaps go through the MLflow registry without losing events.
+* **Contract-first gRPC scoring API** (protobuf, bidirectional streaming, deadlines, health checks), benchmarked against REST/JSON on the same model: **p99 `[g]` ms vs `[r]` ms** `[or: "parity — inference dominates; serialization is <[s]% of the latency budget"]`.
+* **Reliability and governance:** **0 lost events and recovery in `[T]` s** after killing the Flink TaskManager (`[N]` failure scenarios tested with written hypotheses). Evidently drift detection catches an injected fraud-pattern shift within `[M]` min. Backtests run in containers over versioned S3-compatible storage (MinIO). An audit of LLM-generated explanations found **`[H]`% unsupported claims** and fed a prompt fix that cut them to `[H2]`%.
+
+Short version: *Kafka + Flink fraud scoring: **`[X]k` ev/s at p95 `[Y]` ms**, measured end to end; ONNX `[Z]×` faster than native; exactly-once recovery in `[T]` s.*
+
+| Placeholder | Source |
+|---|---|
+| X, Y, bottleneck | E1 load steps (3 repetitions), M4 |
+| Z, parity | ONNX export + benchmark, M3 |
+| R, A, B | Offline evaluation, rules vs XGB, M3 |
+| Shadow impact | E8, M6 |
+| g, r, s | E11, M7c |
+| T, N | F1–F10, M8 |
+| M | Drift demo + Evidently, M6/M6b |
+| H, H2 | Explanation audit (`judgekit`), PLAN §13 |

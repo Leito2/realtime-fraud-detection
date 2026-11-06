@@ -2,7 +2,7 @@
 
 > **Plan de proyecto** (vive en este repo como `PLAN.md`). **Estado:** ✅ Plan completo (12/12 módulos), listo para implementar en la fase F3 del plan de Learning.
 > Stack: Kafka (KRaft) · Flink SQL · Redis · XGBoost → ONNX Runtime · PyTorch (challenger en shadow) · MLflow · PostgreSQL · FastAPI · Prometheus + Grafana · OpenTelemetry · LLM Gateway (`llm-gateway`, Python) · Docker Compose
-> **v2 (§13):** Evidently (drift) · backtesting como job batch en contenedor (KFP local) sobre MinIO/S3 versionado · Pandas · `judgekit` (auditoría de explicaciones)
+> **v2 (§13):** Evidently (drift) · backtesting como job batch en contenedor (`docker run`; KFP opcional) sobre MinIO/S3 versionado · Pandas · `judgekit` (auditoría de explicaciones)
 > **v3 (§14):** gRPC (`grpc.aio`, protobuf, `buf`, deadlines, health, reflection, interceptores OTel) para el scoring síncrono
 > Gasto: **$0** (todo local).
 
@@ -222,6 +222,7 @@ Este módulo alimenta las secciones **Architecture** (con el diagrama), **Design
 - Configuración del productor: `linger.ms=1`, `compression.type=lz4`, `acks=1`. Con un solo broker, `all` equivale a `1`; se documenta igualmente.
 - Semilla fija y parámetros por CLI: `--rate 5000 --duration 300 --users 100000 --fraud-rate 0.008 --scenario-mix default`.
 - Modo `--offline` que escribe Parquet: es el **histórico** del que salen el entrenamiento y el Profile Builder.
+- **Calibración (decisión 2026-11-06):** los parámetros del generador (distribución de montos, tasa de fraude, ritmo por usuario) se ajustan con **estadísticas agregadas** de un dataset público (PaySim; IEEE-CIS como referencia). Solo se usan estadísticas: el modelo **nunca** se entrena con datos públicos, porque no tienen las features de `fraudcore` (paridad, §4.3). Los valores calibrados y su fuente quedan en `config/generator.yaml` y en la *dataset card*.
 
 **🔁 Alternativas.** Generador en Go (más throughput por proceso, y reutiliza tu stack). Herramientas de carga como k6 con la extensión de Kafka (xk6-kafka). Datasets públicos como IEEE-CIS o PaySim (pero no son streaming ni se controla la tasa).
 
@@ -384,7 +385,7 @@ Cada componente se convierte en una subsección de **Components**, con la misma 
 ### 4.2 Datos de entrenamiento
 | Aspecto | Decisión | Por qué |
 |---|---|---|
-| Fuente | `generator --offline`: ~60 días simulados, ~3–5 M pagos en Parquet | Cabe en 8 GB con Polars lazy |
+| Fuente | `generator --offline` (calibrado, §3.1): ~60 días simulados, ~3–5 M pagos en Parquet | Cabe en 8 GB con Polars lazy |
 | Tasa de fraude | ~0.8% | Realista: el desbalance extremo es el problema central |
 | Split | **Temporal**: días 1–40 train, 41–50 validación, 51–60 test | Un split aleatorio filtra el futuro (*leakage*); en producción siempre se predice el futuro |
 | Usuarios | Se reporta además el rendimiento en usuarios **no vistos** | Evita que el modelo "memorice" usuarios |
@@ -412,6 +413,7 @@ Antes del ML hay un motor de reglas simple (p. ej., `f_cnt_10m > 5`, o `is_forei
 - Búsqueda con **Optuna** acotada (~30–50 trials, con timeout), en CPU.
 - **Restricciones monótonas** opcionales (p. ej., el riesgo no baja cuando sube `amount_to_avg_ratio`): mejoran la explicabilidad y la robustez. Se mide si cuestan rendimiento.
 - Todo queda en **MLflow**: parámetros, métricas, curva PR, importancia SHAP global, booster nativo, `.onnx`, firma de features y hash del dataset.
+- **Comparación con LightGBM (decisión 2026-10-19):** mismo split, mismas features (`fraudcore`), mismo presupuesto de Optuna y la misma exportación a ONNX con su test de paridad. XGBoost sigue como champion por defecto (convertidor ONNX más usado y cero costo de cambio). LightGBM se promueve solo si gana con margen claro en PR-AUC o en recall con FPR = 1%, o si las categóricas de alta cardinalidad (`mcc`, `merchant_id`) se vuelven importantes (LightGBM las maneja de forma nativa).
 
 ### 4.6 Umbrales: de probabilidad a decisión
 Un score no es una decisión. Se eligen dos umbrales (`t1`, `t2`) **minimizando el costo esperado** en validación:
@@ -425,7 +427,7 @@ Un score no es una decisión. Se eligen dos umbrales (`t1`, `t2`) **minimizando 
 Con la restricción de que la tasa de `REVIEW` sea ≤ X% (la capacidad del equipo de analistas). El resultado va a `thresholds.yaml` y se registra en MLflow. La curva costo vs umbral entra en el README. Es justo el tipo de razonamiento de negocio que buscan en una entrevista.
 
 ### 4.7 Exportación a ONNX y verificación
-1. Conversión con `onnxmltools` (convertidor de XGBoost). Hummingbird queda como alternativa.
+1. Conversión con `onnxmltools` (convertidores de XGBoost y LightGBM). Hummingbird queda como alternativa.
 2. **Test de paridad numérica:** |pred_ONNX − pred_nativo| < 1e-5 en todo el test set. Si falla, no se registra.
 3. **Benchmark** nativo vs ONNX con tamaños de lote 1, 32 y 500, con p50 y p99 por lote y por evento. Se registra en MLflow y alimenta la cifra "{Z}× faster" del CV.
 
@@ -445,7 +447,7 @@ Con la restricción de que la tasa de `REVIEW` sea ≤ X% (la capacidad del equi
 | Usuarios no vistos | Generalización |
 | Latencia de inferencia | Debe caber en el presupuesto (§5) |
 
-Tabla final: **Reglas vs XGBoost nativo vs XGBoost en ONNX vs MLP challenger**.
+Tabla final: **Reglas vs XGBoost nativo vs XGBoost en ONNX vs LightGBM (nativo y ONNX) vs MLP challenger**.
 
 ### 4.10 Evaluación online y promoción
 - El auditor une `decisions`, `shadow-scores` y `labels`, y las vistas `v_confusion_by_model` y `v_business_tradeoff` comparan los modelos con tráfico **real** del stack.
@@ -1104,15 +1106,15 @@ La sección **Project Structure** y el esqueleto completo, que se crea vacío en
 | **M0 · Bootstrap** | Repo listo para construir | Workspace de uv, `fraudcore` vacío, Compose con profiles (esqueleto), `doctor.py`, CI, `.gitattributes`, devcontainer, esqueleto del README | `make doctor` pasa; CI en verde; el README tiene todas sus secciones | §1 Problem, §2 Core Concepts (borrador), §25 Structure | — | S |
 | **M1 · Esqueleto andante** | Un pago viaja de punta a punta | Generador open-loop básico → Kafka (topics) → Flink SQL pass-through con 1 feature → scorer con regla dummy (ya con la estructura de Clean Architecture y los contratos de `import-linter`, ADR-0002) → `decisions` → Latency Collector mínimo; `make smoke` | `make smoke` imprime p50/p95/p99 a 2k ev/s; **`docker stats` real que reemplaza las estimaciones de §8** | §4 Architecture v1, §20 Quickstart v1 | C1 (notas 00–04) | M |
 | **M2 · Features en tiempo real** | Las features correctas, rápidas y verificadas | **Spike S1** (opción A vs B); ventanas `OVER` de §4.3; `buffer-timeout`; Profile Builder + Redis; Feature Writer; **test de paridad de features** | El test de paridad pasa en la CI; S1 decidido con datos (ADR actualizado); E3 preliminar | §5 Design Decisions, §7 Generator/Kafka/Flink/Redis/Profile Builder, §10 Feature Parity | C1 completo, C2, C3 | L |
-| **M3 · El modelo** | Champion servido desde el registry | Histórico offline; baseline de reglas; XGBoost + Optuna; umbrales por costo; export a ONNX + paridad + benchmark; MLflow; carga del alias y hot-reload en el scorer | Tabla de evaluación offline (reglas vs XGB vs ONNX); paridad ONNX < 1e-5; el scorer decide con el champion; el hot-reload funciona sin perder eventos | §9 Why XGBoost, §11 Thresholds, §12 Offline Evaluation, §7 Scorer y MLflow | C4 (notas 00–01) | L |
+| **M3 · El modelo** | Champion servido desde el registry | Histórico offline; baseline de reglas; XGBoost + Optuna (con LightGBM como comparación, §4.5); umbrales por costo; export a ONNX + paridad + benchmark; MLflow; carga del alias y hot-reload en el scorer | Tabla de evaluación offline (reglas vs XGB vs LightGBM vs ONNX); paridad ONNX < 1e-5; el scorer decide con el champion; el hot-reload funciona sin perder eventos | §9 Why XGBoost, §11 Thresholds, §12 Offline Evaluation, §7 Scorer y MLflow | C4 (notas 00–01) | L |
 | **M4 · La cifra** | **Primera cifra honesta para el CV** | `bench/run.py`, `report.py`, `stats_sampler`; validación de `gen_lag`; manifiestos; E1 (3 repeticiones), E2, E3 | Tabla de resultados generada; gráfica del codo; throughput sostenido definido con las 4 condiciones de §5.4; **primera versión de la frase del CV** | §14 How We Measure, §15 Results v1, §16 Bottleneck Analysis v1, TL;DR v1 | C6 (nota 04) | M |
 | **M5 · Observabilidad** | Operar y diagnosticar en vivo | Catálogo de métricas; dashboards D1–D3 provisionados; reglas de alerta + SLO burn rate; propagación de OTel por headers (1%); E9 | Los dashboards cargan solos; una alerta se dispara de forma controlada; una traza de punta a punta visible (`full` u opcional en `lite`); E9 cuantificado | §17 Observability | C6 completo | M |
 | **M6 · MLOps online** | El ciclo de vida del modelo en vivo | Auditor + Postgres + vistas; challenger MLP (PyTorch → ONNX) en shadow; D4; `make promote`; **demo de drift** + GIF; E8 | Champion vs challenger con etiquetas reales; E8 ≈ 0 de impacto; la demo de drift es reproducible con un comando; GIF grabado | §13 Model Lifecycle, §7 Shadow/Auditor | C4 (nota 04) | L |
-| **M6b · Backtesting y gobernanza** (§13) | Evaluación offline reproducible sobre datos versionados | job batch en contenedor (componente KFP ejecutado con `kfp.local`) sobre MinIO; Evidently; reportes Pandas; *dataset card* | `make backtest` produce champion vs challenger desde MinIO; `make drift-report` genera el reporte de Evidently | §13 Model Lifecycle (gobernanza) | — | M |
+| **M6b · Backtesting y gobernanza** (§13) | Evaluación offline reproducible sobre datos versionados | job batch en contenedor ejecutado con `docker run` (decisión 2026-11-06; como componente KFP con `kfp.local` solo si el pipeline de P2 lo necesita) sobre MinIO; Evidently; reportes Pandas; *dataset card* | `make backtest` produce champion vs challenger desde MinIO; `make drift-report` genera el reporte de Evidently | §13 Model Lifecycle (gobernanza) | — | M |
 | **M7 · Explainer** | "XGBoost decide, el LLM redacta" | SHAP + prompt; gateway con `mock` → `ollama`; backpressure y muestreo; fallback de plantilla; D5; API `GET /decisions/{id}` | Explicaciones en `explanations` y Postgres; el p95 del camino crítico **no cambia** con el explainer activo; el fallback funciona con el gateway caído | §7 Explainer y API | — | M |
 | **M7c · gRPC** (§14) | Scoring síncrono para el checkout | `scoring.proto` (contrato ya en el repo), servidor `grpc.aio`, cliente con deadlines, health, reflection, interceptores, `buf` en la CI, experimento E11 | `grpcurl` llama a los 3 métodos; deadline vencido → `DEADLINE_EXCEEDED` (test); tabla REST vs gRPC publicada | §14 gRPC | C5 (`10/48`) | M |
 | **M8 · Resiliencia** | Fallar con elegancia y demostrarlo | Toxiproxy; `chaos/run.py` + `verify.py`; F1–F10; política de modo degradado; runbooks; E5 | Las 10 fallas ejecutadas con hipótesis confirmadas o refutadas y documentadas; 0 perdidos en F1/F2/F5; tabla de resiliencia | §18 Resilience, runbooks | C1 (nota 03) | L |
-| **M9 · Experimentos restantes** | Completar los trade-offs | E4 (Triton en escalones bajos), E6, E7, E10 | Cada experimento con su gráfica y conclusión de 2–3 líneas | §15 Results completo, §16 v2 | C4 completo, C2 (nota 04) | M |
+| **M9 · Experimentos restantes** | Completar los trade-offs | E4 (Triton en escalones bajos), E6, E7, E10; benchmark offline opcional en IEEE-CIS (§12.2) | Cada experimento con su gráfica y conclusión de 2–3 líneas | §15 Results completo, §16 v2 | C4 completo, C2 (nota 04) | M |
 | **M10 · Pulido y publicación** | Listo para recruiters | Lessons learned, limitations, glosario, Mermaid + PNG, frase final del CV, revisión completa del README, tag `v1.0` | Una persona ajena lo levanta desde el README sin ayuda (prueba con alguien o en Codespaces); frase del CV con cifras y hardware | §26–29, TL;DR final | — | M |
 | **M11 · `⏳ 16GB`** | Cifras con el hardware mejorado | Perfil `full`; E1-full; F1b–F5b; E4 completo; observabilidad completa | Resultados `v1.1` publicados junto a los de 8 GB (no los reemplazan: la comparación también cuenta una historia) | §15, §18, §19 actualizados | — | M |
 
@@ -1161,6 +1163,8 @@ Un detector perfecto sobre datos fáciles no demuestra nada. El generador debe i
 - **Legítimos difíciles:** viajeros reales (cambian de país), ráfagas legítimas (Black Friday, pago de servicios a fin de mes), dispositivos nuevos por cambio de celular, compras grandes ocasionales.
 - **Fraude sutil:** fraudes "lentos" que imitan el ritmo del usuario, montos dentro del rango normal, el mismo país del usuario.
 - **Ruido en las etiquetas:** un pequeño porcentaje de etiquetas erróneas (como en la realidad, donde algunos chargebacks son "fraude amigable").
+- **Calibración con estadísticas públicas** (§3.1): montos, tasa de fraude y ritmo por usuario salen de PaySim, no de supuestos.
+- **Benchmark externo (opcional, M9):** el mismo pipeline de entrenamiento (XGBoost + Optuna) sobre IEEE-CIS, en una tabla offline **aparte** que no se sirve en el sistema. Muestra que el método funciona fuera del generador propio.
 - **Criterio:** si el PR-AUC del baseline de reglas supera ~0.9, el generador es demasiado fácil y se ajusta **antes** de entrenar el modelo final. La dificultad del dataset se documenta en el README.
 
 ### 12.3 MVP y lista de recortes
@@ -1209,7 +1213,7 @@ Si el tiempo aprieta, se recorta en este orden (de lo primero que se sacrifica a
 | Origen (CV) | Elemento | Cómo existe en P1 | Hito |
 |---|---|---|---|
 | Evaluation Suite | Monitoreo de drift y observabilidad continua del modelo | **Evidently** sobre la ventana reciente de `decisions` + features servidas (Postgres) frente al baseline de entrenamiento: drift de datos (PSI, Wasserstein, chi²), drift de predicción y calidad cuando llegan etiquetas. Reportes HTML versionados y *test suites* que alimentan la alerta de drift de §6 y la demo de §4.11. Patrón: *baseline → constraints → schedule (cron local) → violations* | M6 |
-| Evaluation Suite | Jobs de evaluación distribuida sobre datasets versionados en **S3** | **Backtesting offline** como job batch en contenedor (componente KFP ejecutado con `kfp.local`): lee el histórico Parquet desde **MinIO** (API S3, versionado de objetos), re-puntúa con champion y challenger y escribe métricas por segmento. El mismo contenedor corre con `docker run` o dentro del pipeline KFP de P2 | M6b |
+| Evaluation Suite | Jobs de evaluación distribuida sobre datasets versionados en **S3** | **Backtesting offline** como job batch en contenedor ejecutado con `docker run` (decisión 2026-11-06; como componente KFP con `kfp.local` solo si el pipeline de P2 lo necesita): lee el histórico Parquet desde **MinIO** (API S3, versionado de objetos), re-puntúa con champion y challenger y escribe métricas por segmento. El mismo contenedor corre con `docker run` o dentro del pipeline KFP de P2 | M6b |
 | Evaluation Suite | Datasets versionados y gobernanza | MinIO como *data lake* local: `raw/`, `features/`, `training/` con versionado de objetos; manifiesto con hash de contenido; el digest del dataset va en cada corrida de MLflow (linaje); *dataset card* del generador sintético (distribuciones, tasa de fraude, casos difíciles, ruido de etiquetas) | M3, M6b |
 | Evaluation Suite | Auditoría de alucinaciones | Las explicaciones del Explainer se auditan con `judgekit` (P2 §12): cada afirmación se contrasta con los valores SHAP y las features reales del pago ("monto 8× su promedio" debe coincidir con los datos). Métrica `explanation_faithfulness` y `unsupported_claim_rate`; compuerta antes de cambiar el prompt o el modelo del Explainer | M7 |
 | Evaluation Suite | Pandas | Reportes de backtesting y de auditoría como DataFrames (Polars sigue en el Profile Builder por rendimiento; la comparación Polars vs Pandas en el mismo job se documenta) | M6b |
@@ -1225,7 +1229,7 @@ Si el tiempo aprieta, se recorta en este orden (de lo primero que se sacrifica a
 |---|---|
 | M3 | El histórico offline se escribe en MinIO con manifiesto y digest en MLflow |
 | M6 | + Evidently (reportes y *test suites*) como detector de la demo de drift |
-| **M6b · Backtesting y gobernanza** (nuevo, M) | job batch en contenedor (componente KFP ejecutado con `kfp.local`) sobre MinIO; reportes Pandas por segmento; *dataset card*. Criterio: `make backtest` produce la tabla champion vs challenger desde MinIO, sin tocar el stack en vivo |
+| **M6b · Backtesting y gobernanza** (nuevo, M) | job batch en contenedor ejecutado con `docker run` (decisión 2026-11-06; como componente KFP con `kfp.local` solo si el pipeline de P2 lo necesita) sobre MinIO; reportes Pandas por segmento; *dataset card*. Criterio: `make backtest` produce la tabla champion vs challenger desde MinIO, sin tocar el stack en vivo |
 | M7 | + Auditoría de fidelidad de las explicaciones con `judgekit` y compuerta |
 
 ### 13.4 Frase del CV (agregado)
@@ -1255,7 +1259,7 @@ Es el estándar para comunicación **servicio a servicio** de baja latencia (Tri
  Camino asíncrono (sin cambios): Kafka → Flink → scorer → decisions
 ```
 - **Contrato:** `proto/fraud/v1/scoring.proto` con tres RPCs: `Score` (unario), `ScoreStream` (streaming bidireccional) y `GetDecision` (consulta).
-- **Servidor:** `grpc.aio` (asíncrono), implementado como un *entrypoint* del scorer (`services/scorer/src/scorer/entrypoints/grpc_server.py`, ADR-0002) y desplegado como su propio contenedor `scoring-grpc` desde la misma imagen. Llama al caso de uso `score_sync`, que comparte dominio, features (`fraudcore`) y adaptador de modelo con el camino de Kafka: sin *train/serve skew*. La velocity se lee de Redis (la que mantiene el Feature Writer).
+- **Servidor:** `grpc.aio` (asíncrono), implementado como un *entrypoint* del scorer (`services/scorer/src/scorer/entrypoints/grpc_server.py`, ADR-0002) y desplegado como su propio contenedor `scoring-grpc` desde la misma imagen. Llama al caso de uso `score_sync`, que comparte dominio, features (`fraudcore`) y adaptador de modelo con el camino de Kafka: sin *train/serve skew*. La velocity se lee de Redis (la que mantiene el Feature Writer) y **se le suma el pago actual** con una función de `fraudcore` (`cnt+1`, `sum+amount`, `max(max, amount)`, `small_cnt` si aplica), para respetar la semántica de las ventanas `OVER` (incluyen la fila actual, ADR-3). Sin eso, el camino síncrono vería features distintas a las del entrenamiento (decisión 2026-11-06).
 - **Sin duplicar FastAPI:** la API REST de §3.7 se queda para demos y analistas; gRPC es el camino de máquina a máquina.
 
 ### 14.3 Detalle técnico
@@ -1268,6 +1272,7 @@ Es el estándar para comunicación **servicio a servicio** de baja latencia (Tri
 | Health y descubrimiento | `grpc.health.v1` (para Docker y balanceadores) y *server reflection* (para `grpcurl`) |
 | Observabilidad | Interceptores de servidor: métricas de Prometheus por método y código, y spans de OTel con propagación de contexto en la metadata |
 | Seguridad | TLS con certificado autofirmado en local (opcional) y API key por metadata |
+| Paridad de velocity | Test que compara la velocity síncrona (Redis + pago actual) contra la de Flink para los mismos pagos. Se reporta el error residual por el atraso del Feature Writer (esperado: pocos ms de desfase, diferencias en el borde de la ventana) |
 | Streaming | `ScoreStream` agrupa en micro-lotes (hasta N mensajes o T ms) para usar la inferencia por lote de ONNX |
 
 ### 14.4 Experimento E11: REST vs gRPC vs streaming
@@ -1288,3 +1293,46 @@ Resultado esperado (a confirmar): gRPC baja el overhead de serialización y de c
 > … exposes a **gRPC** scoring API (unary, bidirectional streaming, deadlines) next to the Kafka path: **p95 {g} ms vs {r} ms over REST/JSON** on the same model.
 
 El contrato y su test ya están en el repo desde el M0 (`proto/fraud/v1/scoring.proto`, `tests/test_proto_contract.py`).
+
+---
+
+## 15. Decisiones confirmadas (revisión del 2026-11-06)
+
+Revisión completa del plan con el usuario, pregunta por pregunta, antes de implementar. Todas las decisiones quedan confirmadas; las tres que cambiaron el plan están marcadas con ✏️.
+
+| # | Decisión | Elección | Dónde |
+|---|---|---|---|
+| 1 | Objetivo | Portafolio con cifras medidas, no producción | §1 |
+| 2 | Restricción | p95 ≤ 80 ms de punta a punta | §1.4, §2.2 |
+| 3 | Hardware | 8 GB local, $0; 16 GB como resultados extra (M11) | §8 |
+| 4 ✏️ | Datos | Sintético calibrado con estadísticas públicas; benchmark IEEE-CIS opcional (M9) | §3.1, §12.2 |
+| 5 | Forma | Camino crítico + camino asíncrono por eventos | §2.2 |
+| 6 | Transporte | Kafka; re-decidir en D1 con `docker stats` | §11.4 |
+| 7 | Streaming | Flink SQL; PyFlink como plan B (spike S1) | §3.3 |
+| 8 | Garantía | At-least-once + idempotencia; exactly-once como experimento | ADR-4 |
+| 9 | Features | Eventos enriquecidos; Redis solo para el perfil | ADR-1, ADR-2 |
+| 10 | Ventanas | `OVER` | ADR-3 |
+| 11 | Clave | `user_id`, 12 particiones | §2.4 |
+| 12 | Serialización | JSON; Protobuf solo si E1 lo muestra como cuello | ADR-7 |
+| 13 | Etiquetas | Topic `labels` aparte | ADR-5 |
+| 14 | Online store | Redis directo + `fraudcore` (Feast documentado) | §3.5 |
+| 15 | Scorer | Micro-lotes 500 / 5 ms, ajustados en E2 | §3.6, §5.6 |
+| 16 | Inferencia | ONNX in-process; Triton medido en E4 | §2.7 |
+| 17 | Decisión | Dos umbrales por costo, versionados | §4.6 |
+| 18 | Ciclo de vida | MLflow con alias, hot-reload y rollback | §3.13, §4.10 |
+| 19 | Modelo | XGBoost champion; LightGBM como comparación | §4.5 |
+| 20 | Challenger | Shadow mode; canary documentado | §3.8 |
+| 21 | Explainer | SHAP + LLM local, backpressure, fallback a plantilla | §3.10 |
+| 22 | Auditoría | Postgres con upserts idempotentes y vistas | §3.11 |
+| 23 | Observabilidad | Métricas al 100%, trazas al 1%, Tempo en `full` | §6 |
+| 24 | Medición | Open-loop desde `t_scheduled_ns` | §5.3 |
+| 25 | Protocolo | Escalones, 3 repeticiones, 4 condiciones | §5.4 |
+| 26 | Caos | F1–F10 con hipótesis y `verify.py` | §7 |
+| 27 | Degradado | Política intermedia | §7.4 |
+| 28 ✏️ | gRPC | `fraudcore` suma el pago actual a la velocity de Redis + test de paridad | §14.2, §14.3 |
+| 29 ✏️ | v2 | Evidently + `judgekit`; backtesting con `docker run`, KFP opcional | §13 |
+| 30 | MVP | M0 → M4 + demo de drift; orden de recorte del §12.3 | §12.3 |
+| 31 | Lenguaje | Python; Go se decide en D3 con datos | §11.4 |
+| 32 | Código | Servicios orientados a eventos; Clean Architecture en `scorer` y `explainer` | ADR-0002 |
+
+**Siguiente paso:** M1 · Esqueleto andante (§11.3).
