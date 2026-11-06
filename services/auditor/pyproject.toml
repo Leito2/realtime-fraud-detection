@@ -1,0 +1,19 @@
+[project]
+name = "auditor"
+version = "0.1.0"
+description = "Auditor: persists decisions, labels, shadow scores and explanations to Postgres (PLAN.md §3.11)."
+requires-python = ">=3.12"
+dependencies = ["fraudcore", "confluent-kafka>=2.5", "psycopg[binary]>=3.2"]
+
+[project.scripts]
+auditor = "auditor.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/auditor"]
+
+[tool.uv.sources]
+fraudcore = { workspace = true }

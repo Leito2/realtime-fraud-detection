@@ -8,6 +8,7 @@ import time
 import orjson
 from confluent_kafka import Producer
 
+from generator.live import LiveTraffic
 from generator.logic import Population, maybe_traceparent, next_payment
 from generator.schedule import gen_lag_ms, scheduled_ns
 
@@ -16,10 +17,12 @@ GEN_LAG_LIMIT_MS = 5.0      # PLAN.md §5.3: above this p99 the run is invalid
 
 def run_worker(idx: int, args: argparse.Namespace, out: mp.Queue) -> None:
     rate = args.rate / args.procs
-    pop = Population(args.users, args.seed, worker=idx, workers=args.procs)
+    pop = Population(args.users, args.seed, worker=idx, workers=args.procs, zipf=args.zipf)
     rng = random.Random(args.seed * 1000 + idx)
     trace_rng = random.Random(args.seed * 7919 + idx)     # own stream: tracing never changes the payments
     errors = 0
+    live = LiveTraffic(pop, random.Random(args.seed * 31 + idx), fraud_rate=args.fraud_rate,
+                       hard_legit_rate=args.hard_legit_rate) if args.scenarios else None
 
     def on_delivery(err, _msg) -> None:
         nonlocal errors
@@ -41,7 +44,11 @@ def run_worker(idx: int, args: argparse.Namespace, out: mp.Queue) -> None:
         while time.time_ns() < due:             # fine wait; if we are already late, send at once (open loop)
             pass
         sent = time.time_ns()
-        event = next_payment(pop, rng, due, sent)
+        if live:
+            event, label = live.next(due, sent)
+            producer.produce(args.labels_topic, key=event["payment_id"], value=orjson.dumps(label))
+        else:
+            event = next_payment(pop, rng, due, sent)
         traceparent = maybe_traceparent(trace_rng, args.trace_sample)
         headers = [("traceparent", traceparent.encode())] if traceparent else None
         while True:
@@ -63,9 +70,16 @@ def main() -> None:
     ap.add_argument("--rate", type=float, default=2000, help="target events/s (all processes)")
     ap.add_argument("--duration", type=float, default=30, help="seconds")
     ap.add_argument("--users", type=int, default=100_000)
+    ap.add_argument("--zipf", type=float, default=1.0,
+                    help="user activity skew: 1 = Zipf (E1 key skew), 0 = flat (model demos at low rates)")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--topic", default="payments")
+    ap.add_argument("--scenarios", action="store_true",
+                    help="inject fraud and hard-legit episodes and publish their labels (off for E1 runs)")
+    ap.add_argument("--fraud-rate", type=float, default=0.01, help="--scenarios: share of fraud payments")
+    ap.add_argument("--hard-legit-rate", type=float, default=0.01, help="--scenarios: share of hard-legit")
+    ap.add_argument("--labels-topic", default="labels")
     ap.add_argument("--trace-sample", type=float, default=0.01, help="share of payments with a traceparent")
     ap.add_argument("--bootstrap", default=os.environ.get("BOOTSTRAP", "kafka:29092"))
     ap.add_argument("--offline", metavar="PARQUET", help="write a simulated history here instead of Kafka")

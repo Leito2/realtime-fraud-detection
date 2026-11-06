@@ -46,3 +46,8 @@ groups:
         for: 1m
         labels: { severity: warning }
         annotations: { summary: "Scorer is deciding without profiles (Redis unavailable): conservative policy active" }
+      - alert: ScoreDrift
+        expr: fraud_score_psi > 0.25
+        for: 2m
+        labels: { severity: warning }
+        annotations: { summary: "Score distribution drifted from training (PSI above 0.25): retrain or investigate" }

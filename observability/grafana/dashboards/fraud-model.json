@@ -1,0 +1,302 @@
+{
+  "uid": "fraud-model",
+  "title": "D4 Model & Business",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "tags": [
+    "fraud"
+  ],
+  "editable": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Score PSI vs training",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "fraud_score_psi",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.25
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Serving model",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "fraud_model_info == 1",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Score PSI (alert at 0.25)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 16,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "fraud_score_psi",
+          "legendFormat": "psi",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Recall online: champion vs challenger (per minute)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "rawSql": "\nSELECT time, caught::float / NULLIF(fraud, 0) AS champion,\n       shadow_caught::float / NULLIF(shadow_fraud, 0) AS challenger\nFROM (\n  SELECT date_trunc('minute', d.decided_at) AS time,\n         count(*) FILTER (WHERE l.is_fraud) AS fraud,\n         count(*) FILTER (WHERE l.is_fraud AND d.decision <> 'APPROVE') AS caught,\n         count(*) FILTER (WHERE l.is_fraud AND s.payment_id IS NOT NULL) AS shadow_fraud,\n         count(*) FILTER (WHERE l.is_fraud AND s.decision <> 'APPROVE') AS shadow_caught\n  FROM decisions d JOIN labels l USING (payment_id) LEFT JOIN shadow_scores s USING (payment_id)\n  WHERE $__timeFilter(d.decided_at) GROUP BY 1) t\nORDER BY 1\n",
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Fraud outcome per minute (labelled)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "rawSql": "\nSELECT date_trunc('minute', d.decided_at) AS time,\n       count(*) FILTER (WHERE l.is_fraud AND d.decision = 'APPROVE') AS \"fraud approved (missed)\",\n       count(*) FILTER (WHERE l.is_fraud AND d.decision <> 'APPROVE') AS \"fraud flagged\",\n       count(*) FILTER (WHERE NOT l.is_fraud AND d.decision <> 'APPROVE') AS \"legit flagged (friction)\"\nFROM decisions d JOIN labels l USING (payment_id)\nWHERE $__timeFilter(d.decided_at) GROUP BY 1 ORDER BY 1\n",
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Champion / challenger agreement",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "rawSql": "\nSELECT date_trunc('minute', d.decided_at) AS time,\n       avg(((d.decision <> 'APPROVE') = (s.decision <> 'APPROVE'))::int) AS \"champion/challenger agreement\"\nFROM decisions d JOIN shadow_scores s USING (payment_id)\nWHERE $__timeFilter(d.decided_at) GROUP BY 1 ORDER BY 1\n",
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Business trade-off by champion version",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 5
+      },
+      "targets": [
+        {
+          "rawSql": "\nSELECT model_version AS \"model\", labelled, fraud_blocked, fraud_reviewed, fraud_missed, legit_blocked,\n       legit_reviewed, round(review_rate::numeric, 3) AS review_rate\nFROM v_business_tradeoff ORDER BY model_version\n",
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Confusion by model",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT model, flagged, is_fraud AS fraud, n FROM v_confusion_by_model ORDER BY 1, 2, 3",
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

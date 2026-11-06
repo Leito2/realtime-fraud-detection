@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from fraud_training.models import (
 )
 from fraud_training.registry import register_model
 from fraud_training.tune import tune
+from fraudcore.drift import reference_from_scores
 from fraudcore.features import FEATURE_ORDER
 from fraudcore.rules import rules_score
 
@@ -126,6 +128,7 @@ def run(s: Settings) -> dict:
             metrics={**{k: v for k, v in chosen.items() if k != "recall_by_scenario"},
                      "recall_by_scenario": chosen["recall_by_scenario"], "onnx_max_abs_diff": max_diff},
             artifacts={"thresholds.json": thresholds, "dataset_manifest.json": manifest,
+                       "score_reference.json": reference_from_scores(valid_scores[champion]),
                        "eval.json": results},
             tags={"dataset_digest": manifest["digest"], "model_kind": champion},
             run_name=f"{champion}-champion")
@@ -158,6 +161,7 @@ def table(results: dict) -> str:
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")          # MLflow prints an emoji; Windows consoles are cp1252
     ap = argparse.ArgumentParser(description="Train and register the fraud champion")
     ap.add_argument("--history", type=Path, default=Settings.history)
     ap.add_argument("--tracking-uri", default=Settings.tracking_uri)

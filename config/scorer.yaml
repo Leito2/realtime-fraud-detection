@@ -4,3 +4,4 @@ redis: { url: "redis://redis:6379/0", timeout_ms: 5 }
 model: { name: fraud-champion, champion_alias: champion, challenger_alias: challenger, poll_seconds: 5 }
 mlflow: { tracking_uri: "http://mlflow:5000" }
 kafka: { bootstrap: "kafka:29092", input_topic: payments-enriched, output_topic: decisions, shadow_topic: shadow-scores, dlq_topic: dlq }
+log_features: false     # true: decisions carry the served feature vector (feedback dataset); costs bytes on the critical path

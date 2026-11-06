@@ -9,10 +9,14 @@ from datetime import datetime, timedelta
 import polars as pl
 
 from generator.logic import Population, build_payment, next_payment
-from generator.scenarios import FRAUD_KINDS, LEGIT_HARD_KINDS, apply_label_noise, make_episode
-
-AVG_FRAUD_EPISODE_PAYMENTS = 4.5
-AVG_LEGIT_EPISODE_PAYMENTS = 3.0
+from generator.scenarios import (
+    AVG_FRAUD_EPISODE_PAYMENTS,
+    AVG_LEGIT_EPISODE_PAYMENTS,
+    FRAUD_KINDS,
+    LEGIT_HARD_KINDS,
+    apply_label_noise,
+    make_episode,
+)
 
 
 def _stochastic_round(x: float, rng: random.Random) -> int:

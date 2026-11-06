@@ -66,3 +66,31 @@ def test_thresholds_travel_with_the_model_and_win_over_the_configured_ones():
     out = uc([event("a"), event("b", "u_2")])
     assert [d.decision for d in out] == ["REVIEW", "BLOCK"]  # configured 0.3/0.8 would differ
     assert {d.threshold_set for d in out} == {"m-v7"}
+
+
+def test_served_features_are_logged_only_when_asked():
+    from fraudcore.features import FEATURE_ORDER
+
+    uc, *_ = build([0.1])
+    assert uc([event("a")])[0].features is None                 # critical path stays lean by default
+    uc, *_ = build([0.1])
+    uc.log_features = True
+    served = uc([event("a", amount=77.0)])[0].features
+    assert list(served) == list(FEATURE_ORDER) and served["amount"] == 77.0
+
+
+def test_the_models_score_reference_is_forwarded_to_the_metrics():
+    import numpy as np
+    from scorer.application.ports import Prediction
+    from scorer.testing import RecordingMetrics
+
+    ref = {"edges": [0.0, 1.0], "fractions": [1.0]}
+
+    class WithReference(FakeModel):
+        def predict(self, X):
+            return Prediction(np.array(self.scores[: len(X)]), "m", "7", None, ref)
+
+    uc, *_ = build([0.1])
+    uc.model, uc.metrics = WithReference([0.1]), RecordingMetrics()
+    uc([event("a")])
+    assert uc.metrics.batches[0].score_reference == ref

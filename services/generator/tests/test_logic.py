@@ -77,3 +77,17 @@ def test_trace_sampling_rate_and_determinism():
     assert all(g.startswith("00-") and g.endswith("-01") for g in sampled)
     assert [maybe_traceparent(random.Random(1), 0.0) for _ in range(100)] == [None] * 100
     assert maybe_traceparent(random.Random(1), 1.0) is not None
+
+
+def test_zipf_exponent_controls_how_concentrated_the_traffic_is():
+    def top_share(zipf: float) -> float:
+        pop = Population(n_users=200, seed=2, zipf=zipf)
+        rng = random.Random(2)
+        counts: dict[str, int] = {}
+        for _ in range(4_000):
+            uid = pop.pick_user(rng)
+            counts[uid] = counts.get(uid, 0) + 1
+        return max(counts.values()) / 4_000
+
+    assert top_share(1.0) > 0.12                    # the default: a few very busy users
+    assert top_share(0.0) < 0.02                    # flat: every user about as busy as any other

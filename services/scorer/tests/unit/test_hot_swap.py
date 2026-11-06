@@ -104,3 +104,13 @@ def test_models_without_thresholds_leave_the_configured_ones_in_charge(make_onnx
     reg.publish("1", 0.1)
     m.refresh()
     assert m.predict(X).thresholds is None
+
+
+def test_score_reference_published_with_the_model_reaches_the_prediction(make_onnx):
+    reg = FakeRegistry(make_onnx)
+    m = model_with(reg)
+    ref = {"edges": [0.0, 0.5, 1.0], "fractions": [0.9, 0.1]}
+    reg.versions["1"] = RegisteredModel(make_onnx(0.1), list(FEATURE_ORDER), None, ref)
+    reg.alias = "1"
+    m.refresh()
+    assert m.predict(X).reference == ref

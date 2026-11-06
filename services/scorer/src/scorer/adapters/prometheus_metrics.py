@@ -2,8 +2,12 @@
 
 Never put ``user_id`` or ``payment_id`` in a label: cardinality would take Prometheus down.
 """
+from collections import deque
+
+import numpy as np
 from prometheus_client import REGISTRY, CollectorRegistry, Counter, Gauge, Histogram, start_http_server
 
+from fraudcore.drift import psi
 from scorer.application.ports import BatchStats
 
 E2E_BUCKETS = [.005, .01, .02, .03, .04, .05, .06, .07, .08, .09, .1, .15, .25, .5, 1, 2.5]
@@ -13,7 +17,8 @@ BATCH_BUCKETS = [1, 5, 10, 25, 50, 100, 200, 300, 400, 500]
 
 
 class PrometheusMetrics:
-    def __init__(self, registry: CollectorRegistry = REGISTRY) -> None:
+    def __init__(self, registry: CollectorRegistry = REGISTRY, psi_window: int = 2000,
+                 psi_min_scores: int = 500) -> None:
         self._e2e = Histogram("fraud_e2e_latency_seconds", "Payment scheduled -> decision published",
                               buckets=E2E_BUCKETS, registry=registry)
         self._stage = Histogram("fraud_stage_latency_seconds", "Per micro-batch stage duration", ["stage"],
@@ -28,6 +33,10 @@ class PrometheusMetrics:
                                  registry=registry)
         self._info = Gauge("fraud_model_info", "1 for the model version currently serving",
                            ["model", "version"], registry=registry)
+        self._psi = Gauge("fraud_score_psi", "PSI of recent scores vs the serving model's training scores",
+                          registry=registry)
+        self._recent: deque[float] = deque(maxlen=psi_window)
+        self._psi_min = psi_min_scores
         self._current: tuple[str, str] | None = None
 
     def observe_batch(self, s: BatchStats) -> None:
@@ -48,6 +57,11 @@ class PrometheusMetrics:
                 self._info.labels(*self._current).set(0)
             self._info.labels(s.model, s.version).set(1)
             self._current = (s.model, s.version)
+            self._recent.clear()                          # a new model's scores are not comparable to the old
+        if s.score_reference:
+            self._recent.extend(s.scores)
+            if len(self._recent) >= self._psi_min:
+                self._psi.set(psi(s.score_reference, np.fromiter(self._recent, dtype=np.float64)))
 
 
 def serve(port: int = 9100) -> PrometheusMetrics:

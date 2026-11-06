@@ -10,6 +10,7 @@ from pathlib import Path
 
 OUT = Path(__file__).parent / "dashboards"
 DS = {"type": "prometheus", "uid": "prom"}
+PG = {"type": "grafana-postgresql-datasource", "uid": "pg"}
 BUDGET = 0.08
 
 
@@ -57,6 +58,17 @@ class Board:
         self._panel("table", title, [(expr, "")], "short", w, h)
         self.panels[-1]["targets"][0]["format"] = "table"
         self.panels[-1]["targets"][0]["instant"] = True
+
+    def sql(self, title: str, query: str, kind: str = "timeseries", unit: str = "short", w: int = 12,
+            h: int = 8, **extra) -> None:
+        """Panel over the audit store (PostgreSQL). Time series need a ``time`` column."""
+        self._id += 1
+        fmt = "table" if kind == "table" else "time_series"
+        self.panels.append({
+            "id": self._id, "type": kind, "title": title, "datasource": PG, "gridPos": self._place(w, h),
+            "targets": [{"rawSql": query, "rawQuery": True, "editorMode": "code", "format": fmt, "refId": "A",
+                         "datasource": PG}],
+            "fieldConfig": {"defaults": {"unit": unit}, "overrides": []}, **extra})
 
     def build(self) -> dict:
         return {"uid": self.uid, "title": self.title, "schemaVersion": 39, "version": 1, "refresh": "5s",
@@ -130,9 +142,60 @@ def streaming() -> Board:
     return b
 
 
+RECALL_BY_MODEL = """
+SELECT time, caught::float / NULLIF(fraud, 0) AS champion,
+       shadow_caught::float / NULLIF(shadow_fraud, 0) AS challenger
+FROM (
+  SELECT date_trunc('minute', d.decided_at) AS time,
+         count(*) FILTER (WHERE l.is_fraud) AS fraud,
+         count(*) FILTER (WHERE l.is_fraud AND d.decision <> 'APPROVE') AS caught,
+         count(*) FILTER (WHERE l.is_fraud AND s.payment_id IS NOT NULL) AS shadow_fraud,
+         count(*) FILTER (WHERE l.is_fraud AND s.decision <> 'APPROVE') AS shadow_caught
+  FROM decisions d JOIN labels l USING (payment_id) LEFT JOIN shadow_scores s USING (payment_id)
+  WHERE $__timeFilter(d.decided_at) GROUP BY 1) t
+ORDER BY 1
+"""
+FRAUD_OUTCOME = """
+SELECT date_trunc('minute', d.decided_at) AS time,
+       count(*) FILTER (WHERE l.is_fraud AND d.decision = 'APPROVE') AS "fraud approved (missed)",
+       count(*) FILTER (WHERE l.is_fraud AND d.decision <> 'APPROVE') AS "fraud flagged",
+       count(*) FILTER (WHERE NOT l.is_fraud AND d.decision <> 'APPROVE') AS "legit flagged (friction)"
+FROM decisions d JOIN labels l USING (payment_id)
+WHERE $__timeFilter(d.decided_at) GROUP BY 1 ORDER BY 1
+"""
+BY_VERSION = """
+SELECT model_version AS "model", labelled, fraud_blocked, fraud_reviewed, fraud_missed, legit_blocked,
+       legit_reviewed, round(review_rate::numeric, 3) AS review_rate
+FROM v_business_tradeoff ORDER BY model_version
+"""
+CONFUSION = "SELECT model, flagged, is_fraud AS fraud, n FROM v_confusion_by_model ORDER BY 1, 2, 3"
+AGREEMENT = """
+SELECT date_trunc('minute', d.decided_at) AS time,
+       avg(((d.decision <> 'APPROVE') = (s.decision <> 'APPROVE'))::int) AS "champion/challenger agreement"
+FROM decisions d JOIN shadow_scores s USING (payment_id)
+WHERE $__timeFilter(d.decided_at) GROUP BY 1 ORDER BY 1
+"""
+
+
+def model_business() -> Board:
+    b = Board("fraud-model", "D4 Model & Business")
+    b.stat("Score PSI vs training", "fraud_score_psi", "short",
+           thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None},
+                                                    {"color": "orange", "value": 0.1},
+                                                    {"color": "red", "value": 0.25}]})
+    b.table("Serving model", "fraud_model_info == 1")
+    b.series("Score PSI (alert at 0.25)", [("fraud_score_psi", "psi")], "short", w=16)
+    b.sql("Recall online: champion vs challenger (per minute)", RECALL_BY_MODEL, unit="percentunit")
+    b.sql("Fraud outcome per minute (labelled)", FRAUD_OUTCOME)
+    b.sql("Champion / challenger agreement", AGREEMENT, unit="percentunit")
+    b.sql("Business trade-off by champion version", BY_VERSION, kind="table", w=24, h=5)
+    b.sql("Confusion by model", CONFUSION, kind="table", w=24, h=7)
+    return b
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    for board in (overview(), latency(), streaming()):
+    for board in (overview(), latency(), streaming(), model_business()):
         (OUT / f"{board.uid}.json").write_text(json.dumps(board.build(), indent=2) + "\n", encoding="utf-8")
         print("wrote", board.uid)
 

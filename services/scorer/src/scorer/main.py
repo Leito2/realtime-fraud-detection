@@ -47,6 +47,7 @@ def main() -> None:
         profiles=RedisProfileStore(redis_client), model=model,
         sink=KafkaDecisionSink(producer, cfg.output_topic),
         thresholds=cfg.thresholds, policy=cfg.policy, clock=SystemClock(), metrics=metrics,
+        log_features=cfg.log_features and args.mode == "champion",
         tracer=tracer_from_env(f"scorer-{args.mode}"))
 
     def to_dlq(raw: bytes, why: str) -> None:

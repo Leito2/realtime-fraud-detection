@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 PROFILE ?= core
-.PHONY: help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train promote history trace-up
+.PHONY: help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train train-challenger promote history trace-up shadow
 
 help:      ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
@@ -36,7 +36,13 @@ history:   ## Simulate 60 days (600k payments, fraud scenarios) for training: da
 	uv run python -m generator.main --offline data/history_full.parquet --days 60 --payments-per-day 10000 --users 20000
 train:     ## Train rules/XGBoost/LightGBM, verify ONNX, register the champion in MLflow (needs `make up`)
 	uv run python -m fraud_training.train --history data/history_full.parquet $(TRAIN_ARGS)
+train-challenger:  ## Train the PyTorch MLP and register it as the `challenger` alias (needs `uv sync --extra nn`)
+	uv run train-challenger --history data/history_full.parquet $(TRAIN_ARGS)
+promote:   ## Move the champion alias to MODEL (default challenger) if config/promotion.yaml is met; FORCE=1 skips the check
+	uv run promote --source $(or $(MODEL),challenger) $(if $(FORCE),--force,)
+shadow:    ## Labelled traffic in the regime the models were trained on, for the champion-vs-challenger views (RATE=20 DURATION=300)
+	docker compose --profile tools run --rm -T generator --rate $(or $(RATE),20) --duration $(or $(DURATION),300) --users 20000 --zipf 0 --scenarios
 bench:     ## Load protocol E1 (rate steps x3, p95/p99, sustained throughput); BENCH_ARGS to override
 	uv run python -m fraud_bench.run e1 $(BENCH_ARGS)
-chaos promote:   ## Implemented in later milestones (PLAN.md §11)
+chaos:     ## Implemented in a later milestone (PLAN.md §11)
 	@echo "'$@' arrives in a later milestone — see PLAN.md §11"; exit 1

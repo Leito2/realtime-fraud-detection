@@ -12,7 +12,7 @@ CHANNELS = ["web", "app", "pos"]
 class Population:
     """Users with fixed habits (home country, devices, typical amount) and Zipf-like activity."""
 
-    def __init__(self, n_users: int, seed: int, worker: int = 0, workers: int = 1) -> None:
+    def __init__(self, n_users: int, seed: int, worker: int = 0, workers: int = 1, zipf: float = 1.0) -> None:
         rng = random.Random(seed)
         self.user_ids = [f"u_{i:06d}" for i in range(n_users) if i % workers == worker]
         self._habits = {}
@@ -23,8 +23,9 @@ class Population:
                 "mu": rng.uniform(2.5, 5.0),                       # log-amount location
                 "card": f"c_{uid[2:]}",
             }
-        # Zipf weights over this worker's users: rank r gets 1/r
-        self._cum_weights = list(accumulate(1.0 / (r + 1) for r in range(len(self.user_ids))))
+        # Zipf weights over this worker's users: rank r gets 1/r**zipf (0 = flat). At high rates a skewed
+        # population has one user paying many times per second, far outside the training regime.
+        self._cum_weights = list(accumulate(1.0 / (r + 1) ** zipf for r in range(len(self.user_ids))))
 
     def habits(self, user_id: str) -> dict:
         return self._habits[user_id]

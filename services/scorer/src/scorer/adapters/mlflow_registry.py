@@ -43,7 +43,8 @@ class MlflowRegistry:
                                                              tracking_uri=self._uri))
             model = RegisteredModel((local / "model.onnx").read_bytes(),
                                     json.loads((local / "features.json").read_text(encoding="utf-8")),
-                                    _read_json(local / "thresholds.json"))
+                                    _read_json(local / "thresholds.json"),
+                                    _read_json(local / "score_reference.json"))
         self._write_cache(version, model)
         return model
 
@@ -62,7 +63,7 @@ class MlflowRegistry:
             return None
         return RegisteredModel((d / "model.onnx").read_bytes(),
                                json.loads((d / "features.json").read_text(encoding="utf-8")),
-                               _read_json(d / "thresholds.json"))
+                               _read_json(d / "thresholds.json"), _read_json(d / "score_reference.json"))
 
     def _write_cache(self, version: str, model: RegisteredModel) -> None:
         if not self._cache:
@@ -72,4 +73,6 @@ class MlflowRegistry:
         (d / "features.json").write_text(json.dumps(model.features), encoding="utf-8")
         if model.thresholds:
             (d / "thresholds.json").write_text(json.dumps(model.thresholds), encoding="utf-8")
+        if model.reference:
+            (d / "score_reference.json").write_text(json.dumps(model.reference), encoding="utf-8")
         (d / "model.onnx").write_bytes(model.onnx_bytes)       # written last: marks a complete entry

@@ -45,3 +45,22 @@ class DecisionEvent(BaseModel):
     degraded: bool = False
     t_scheduled_ns: int
     t_decided_ns: int
+    # Served feature vector, logged on request so retraining uses what the model really saw.
+    features: dict[str, float] | None = None
+
+
+class LabelEvent(BaseModel):
+    """What the bank learns about a payment later. Own topic (``labels``), not in ``payments`` (ADR-5)."""
+
+    payment_id: str
+    is_fraud: bool
+    scenario: str | None = None
+
+
+class ExplanationEvent(BaseModel):
+    """Async explanation of a decision (PLAN.md §3.10). ``skipped`` = shed under backpressure."""
+
+    payment_id: str
+    status: Literal["llm", "template", "skipped"]
+    text: str | None = None
+    top_features: list[tuple[str, float]] | None = None     # (feature, signed SHAP contribution)

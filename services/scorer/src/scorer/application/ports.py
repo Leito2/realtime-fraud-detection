@@ -27,6 +27,7 @@ class Prediction(NamedTuple):
     model: str
     version: str
     thresholds: Thresholds | None = None      # published with the model; None = use the configured ones
+    reference: dict | None = None             # score distribution at training time, for drift (PSI)
 
 
 class ModelRuntime(Protocol):
@@ -55,6 +56,7 @@ class BatchStats:
     decisions: dict[str, int] = field(default_factory=dict)
     scores: list[float] = field(default_factory=list)
     e2e_s: list[float] = field(default_factory=list)       # decision published - payment scheduled, per event
+    score_reference: dict | None = None                   # the serving model's training-time score bins
 
 
 class Metrics(Protocol):

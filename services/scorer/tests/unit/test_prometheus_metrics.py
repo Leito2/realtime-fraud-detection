@@ -40,3 +40,49 @@ def test_model_version_is_a_gauge_and_degraded_batches_are_counted():
 
 def test_buckets_are_dense_around_the_80_ms_budget():
     assert sum(1 for b in E2E_BUCKETS if 0.04 <= b <= 0.1) >= 6 and 0.08 in E2E_BUCKETS
+
+
+def _reference():
+    import numpy as np
+
+    from fraudcore.drift import reference_from_scores
+
+    return reference_from_scores(np.random.default_rng(0).beta(1, 20, size=20_000))
+
+
+def test_psi_gauge_stays_quiet_until_the_window_is_big_enough():
+    import numpy as np
+
+    reg = CollectorRegistry()
+    m = PrometheusMetrics(reg, psi_min_scores=500)
+    m.observe_batch(stats(scores=list(np.random.default_rng(1).beta(1, 20, size=100)),
+                          score_reference=_reference(), decisions={}, e2e_s=[]))
+    assert value(reg, "fraud_score_psi") == 0.0                 # too few scores to say anything
+
+
+def test_psi_gauge_reads_low_on_the_trained_distribution_and_high_after_a_shift():
+    import numpy as np
+
+    reg = CollectorRegistry()
+    m = PrometheusMetrics(reg, psi_window=1000, psi_min_scores=500)
+    rng, ref = np.random.default_rng(2), _reference()
+    m.observe_batch(stats(scores=list(rng.beta(1, 20, size=1000)), score_reference=ref,
+                          decisions={}, e2e_s=[]))
+    assert value(reg, "fraud_score_psi") < 0.05
+    m.observe_batch(stats(scores=list(rng.beta(2, 5, size=1000)), score_reference=ref,
+                          decisions={}, e2e_s=[]))
+    assert value(reg, "fraud_score_psi") > 0.25                 # the window now holds only shifted scores
+
+
+def test_a_new_model_version_starts_a_fresh_psi_window():
+    import numpy as np
+
+    reg = CollectorRegistry()
+    m = PrometheusMetrics(reg, psi_window=1000, psi_min_scores=500)
+    rng, ref = np.random.default_rng(3), _reference()
+    m.observe_batch(stats(version="1", scores=list(rng.beta(2, 5, size=1000)), score_reference=ref,
+                          decisions={}, e2e_s=[]))
+    assert value(reg, "fraud_score_psi") > 0.25
+    m.observe_batch(stats(version="2", scores=list(rng.beta(1, 20, size=600)), score_reference=ref,
+                          decisions={}, e2e_s=[]))
+    assert value(reg, "fraud_score_psi") < 0.05                 # old version's scores no longer count

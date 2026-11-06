@@ -24,6 +24,7 @@ class RegisteredModel:
     onnx_bytes: bytes
     features: list[str]
     thresholds: dict | None = None            # {'review': x, 'block': y}, tuned for this model's scores
+    reference: dict | None = None             # {'edges': [...], 'fractions': [...]} from training
 
 
 class ModelRegistry(Protocol):
@@ -63,7 +64,8 @@ class HotSwapModel:
             if loaded.thresholds:
                 cut = loaded.thresholds
                 thresholds = Thresholds(f"{self._name}-v{version}", cut["review"], cut["block"])
-            model = OnnxModel(loaded.onnx_bytes, self._name, version, self._threads, thresholds)
+            model = OnnxModel(loaded.onnx_bytes, self._name, version, self._threads, thresholds,
+                              loaded.reference)
         except Exception:
             log.exception("model v%s could not be loaded; refusing it", version)
             self._rejected.add(version)

@@ -1,0 +1,68 @@
+{
+  "model": "mlp",
+  "metrics": {
+    "pr_auc": 0.5938737323890927,
+    "recall_at_fpr_1pct": 0.667816091954023,
+    "recall_by_scenario": {
+      "account_takeover": 0.9726027397260274,
+      "atypical_amount": 0.04,
+      "burst": 0.6578947368421053,
+      "card_testing": 0.9386666666666666,
+      "geo_jump": 0.42,
+      "slow_fraud": 0.011111111111111112
+    },
+    "pr_auc_unseen_users": 0.5504939862542955,
+    "cost": 40818.42,
+    "review_rate": 0.01084,
+    "block_rate": 0.0039,
+    "review_threshold": 0.4074170955534938,
+    "block_threshold": 0.9877991605732674
+  },
+  "onnx_parity": {
+    "max_abs_diff": 4.172325134277344e-07,
+    "rows_over_tol": 0,
+    "rows": 100000,
+    "ok": true
+  },
+  "dataset": {
+    "file": "history_full.parquet",
+    "digest": "ff017c8b7241c7e70c2d9a13cc44e9db969625c39fc8fe7b5c2d835d8bde9ca0",
+    "rows": 600000,
+    "days": 60,
+    "fraud_rate_true": 0.008428333333333333,
+    "fraud_rate_label": 0.008418333333333333,
+    "scenarios": {
+      "legit_burst": 3102,
+      "atypical_amount": 163,
+      "account_takeover": 335,
+      "slow_fraud": 525,
+      "card_testing": 1941,
+      "normal": 588637,
+      "burst": 1729,
+      "new_device": 1002,
+      "geo_jump": 364,
+      "traveler": 1710,
+      "big_purchase": 492
+    },
+    "features": [
+      "amount",
+      "f_cnt_10m",
+      "f_sum_10m",
+      "f_max_10m",
+      "f_small_tx_cnt_10m",
+      "avg_amount_30d",
+      "std_amount_30d",
+      "n_known_devices",
+      "account_age_days",
+      "amount_to_avg_ratio",
+      "amount_zscore",
+      "is_foreign",
+      "ip_country_mismatch"
+    ]
+  },
+  "registry": {
+    "model": "fraud-champion",
+    "alias": "challenger",
+    "version": "2"
+  }
+}

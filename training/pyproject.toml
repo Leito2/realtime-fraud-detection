@@ -6,11 +6,16 @@ requires-python = ">=3.12"
 dependencies = [
     "fraudcore", "polars>=1.0", "numpy>=1.26", "scikit-learn>=1.5", "xgboost>=2.1", "lightgbm>=4.5",
     "optuna>=4", "onnx>=1.16", "onnxmltools>=1.12", "onnxruntime>=1.19", "skl2onnx>=1.17", "mlflow-skinny>=2.16",
-    "pyarrow>=16", "pyyaml>=6",
+    "pyarrow>=16", "pyyaml>=6", "psycopg[binary]>=3.2",
 ]
+
+[project.optional-dependencies]
+nn = ["torch>=2.4"]          # challenger MLP (PLAN.md section 4.8); not needed by the champion path
 
 [project.scripts]
 train = "fraud_training.train:main"
+train-challenger = "fraud_training.challenger:main"
+promote = "fraud_training.promote:main"
 
 [build-system]
 requires = ["hatchling"]

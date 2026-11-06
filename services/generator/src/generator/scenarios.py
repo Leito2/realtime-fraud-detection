@@ -12,6 +12,8 @@ from generator.logic import COUNTRIES
 
 FRAUD_KINDS = ["burst", "geo_jump", "card_testing", "atypical_amount", "account_takeover", "slow_fraud"]
 LEGIT_HARD_KINDS = ["traveler", "legit_burst", "new_device", "big_purchase"]
+AVG_FRAUD_EPISODE_PAYMENTS = 4.5
+AVG_LEGIT_EPISODE_PAYMENTS = 3.0
 
 
 @dataclass(frozen=True)

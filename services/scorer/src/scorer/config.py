@@ -27,8 +27,14 @@ class Settings:
     onnx_threads: int
     model_cache_dir: Path | None
     metrics_port: int
+    log_features: bool
     thresholds: Thresholds
     policy: DegradedPolicy
+
+
+def _flag(env: str, default: bool) -> bool:
+    raw = os.environ.get(env)
+    return default if not raw else raw.lower() in {"1", "true", "yes"}
 
 
 def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
@@ -53,6 +59,7 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
         model_alias=scorer["model"]["challenger_alias" if shadow else "champion_alias"],
         poll_s=float(scorer["model"]["poll_seconds"]),
         onnx_threads=int(scorer["onnx"]["intra_op_num_threads"]),
+        log_features=_flag("LOG_FEATURES", scorer.get("log_features", False)),
         metrics_port=int(os.environ.get("METRICS_PORT", 9101 if shadow else 9100)),
         model_cache_dir=Path(os.environ["MODEL_CACHE_DIR"]) if os.environ.get("MODEL_CACHE_DIR") else None,
         thresholds=Thresholds(th["threshold_set"], th["review"], th["block"]),

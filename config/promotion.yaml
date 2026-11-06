@@ -1,0 +1,4 @@
+# Promotion criterion, written before looking at results (PLAN.md section 4.10). Used by `make promote`.
+min_labelled: 2000        # labelled events each model must have been compared on
+min_recall_gain: 0.02     # absolute recall points the challenger must add over the champion
+max_fpr_increase: 0.005   # and it may raise the false-alarm rate by at most this much

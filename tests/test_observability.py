@@ -41,7 +41,8 @@ def dashboard_exprs() -> list[tuple[str, str]]:
     for path in sorted((OBS / "grafana" / "dashboards").glob("*.json")):
         for panel in json.loads(path.read_text(encoding="utf-8"))["panels"]:
             for target in panel.get("targets", []):
-                out.append((path.name, target["expr"]))
+                if "expr" in target:                              # SQL panels (the audit store) have rawSql
+                    out.append((path.name, target["expr"]))
     return out
 
 
@@ -74,7 +75,7 @@ def recorded_names() -> set[str]:
 def test_dashboards_cover_the_questions_of_the_plan():
     titles = {json.loads(p.read_text(encoding="utf-8"))["title"]
               for p in (OBS / "grafana" / "dashboards").glob("*.json")}
-    assert {"D1 Overview", "D2 Latency Breakdown", "D3 Kafka & Flink"} <= titles
+    assert {"D1 Overview", "D2 Latency Breakdown", "D3 Kafka & Flink", "D4 Model & Business"} <= titles
 
 
 def test_dashboard_uids_are_unique_and_use_the_provisioned_datasource():
@@ -83,7 +84,7 @@ def test_dashboard_uids_are_unique_and_use_the_provisioned_datasource():
         d = json.loads(p.read_text(encoding="utf-8"))
         uids.append(d["uid"])
         for panel in d["panels"]:
-            assert panel["datasource"]["uid"] == "prom"
+            assert panel["datasource"]["uid"] in {"prom", "pg"}
     assert len(uids) == len(set(uids))
 
 
@@ -93,7 +94,7 @@ def test_alert_catalog_has_the_planned_alerts_with_severity_labels():
         for group in yaml.safe_load(path.read_text(encoding="utf-8"))["groups"]:
             alerts.update({r["alert"]: r for r in group["rules"] if "alert" in r})
     assert {"LatencySLOBurn", "ConsumerLagGrowing", "FlinkCheckpointsFailing", "DlqNotEmpty",
-            "BlockRateAnomaly", "ScorerDegraded"} <= set(alerts)
+            "BlockRateAnomaly", "ScorerDegraded", "ScoreDrift"} <= set(alerts)
     assert all(a["labels"]["severity"] in {"critical", "warning", "info"} for a in alerts.values())
     assert alerts["LatencySLOBurn"]["labels"]["severity"] == "critical"
 

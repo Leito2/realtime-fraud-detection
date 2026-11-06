@@ -40,3 +40,16 @@ CREATE OR REPLACE VIEW v_feedback_dataset AS
 SELECT d.payment_id, d.features, l.is_fraud, d.decided_at
 FROM decisions d JOIN labels l USING (payment_id)
 WHERE d.features IS NOT NULL;
+
+-- Fraud amount caught vs friction imposed on legitimate customers, per champion model version (PLAN.md §3.11).
+CREATE OR REPLACE VIEW v_business_tradeoff AS
+SELECT d.model_version,
+       COUNT(*)                                                                   AS labelled,
+       COUNT(*) FILTER (WHERE l.is_fraud AND d.decision = 'BLOCK')                AS fraud_blocked,
+       COUNT(*) FILTER (WHERE l.is_fraud AND d.decision = 'REVIEW')               AS fraud_reviewed,
+       COUNT(*) FILTER (WHERE l.is_fraud AND d.decision = 'APPROVE')              AS fraud_missed,
+       COUNT(*) FILTER (WHERE NOT l.is_fraud AND d.decision = 'BLOCK')            AS legit_blocked,
+       COUNT(*) FILTER (WHERE NOT l.is_fraud AND d.decision = 'REVIEW')           AS legit_reviewed,
+       COUNT(*) FILTER (WHERE d.decision = 'REVIEW')::float / NULLIF(COUNT(*), 0) AS review_rate
+FROM decisions d JOIN labels l USING (payment_id)
+GROUP BY d.model_version;
