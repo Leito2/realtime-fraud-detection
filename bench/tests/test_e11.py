@@ -33,7 +33,7 @@ def test_a_slow_server_shows_up_as_latency_even_when_requests_overlap():
 
     samples = asyncio.run(open_loop(rate=100, duration_s=0.5, send=send))
     s = summarize("x", 100, samples)
-    # Windows asyncio timers are coarse (see e11.py docstring), so the start-lag validity flag is not asserted here:
+    # Windows asyncio timers are coarse (see e11.py docstring), so start-lag validity is not asserted here:
     # test_a_client_that_fell_behind_its_schedule_invalidates_the_run covers it deterministically.
     assert 30 <= s.p50 <= 120
 
