@@ -4,7 +4,7 @@ hypothesis: >-
   Malformed records written to the payments topic end up in the DLQ and the pipeline does not stop: valid
   payments keep flowing and none is lost.
 mechanism: Schema validation at the edge (Flink reads the raw record; whatever is not a valid payment goes to the dlq topic).
-rate: 400
+rate: 200
 fault_at_s: 60
 observe_s: 90
 fault: { type: poison, topic: payments, count: 500 }

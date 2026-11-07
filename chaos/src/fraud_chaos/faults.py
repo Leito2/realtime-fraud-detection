@@ -18,9 +18,16 @@ def _compose(*args: str) -> str:
     return r.stdout.strip()
 
 
-def kill(service: str, **_) -> str:
+def kill(service: str, restart_after_s: float | None = 3, **_) -> str:
+    """SIGKILL a service. Docker does not apply a restart policy to a container that `docker kill` stopped
+    (it counts as a manual stop), so the injector plays the orchestrator: it starts the container again after
+    ``restart_after_s``. ``None`` leaves it dead for the whole run."""
     _compose("kill", service)                                   # SIGKILL: no graceful shutdown
-    return f"SIGKILL to {service}; the restart policy brings it back"
+    if restart_after_s is None:
+        return f"SIGKILL to {service}; it stays down"
+    time.sleep(restart_after_s)
+    _compose("start", service)
+    return f"SIGKILL to {service}; the orchestrator (this tool) starts it again after {restart_after_s:g} s"
 
 
 def stop_then_start(service: str, down_s: float = 20, **_) -> str:

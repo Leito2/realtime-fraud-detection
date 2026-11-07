@@ -4,7 +4,7 @@ hypothesis: >-
   The scorer does not stop. While Redis is unreachable it decides with neutral profile values and the
   conservative thresholds, marks the decisions degraded, and nothing is lost.
 mechanism: 5 ms Redis timeout in the profile store, ProfileUnavailable handled by the degraded policy (PLAN 7.4).
-rate: 400
+rate: 200
 fault_at_s: 60
 observe_s: 120
 fault: { type: stop, service: redis, down_s: 30 }

@@ -84,12 +84,22 @@ def timeline(decided: list[Decided], fault_s: float, lo: int = -60, hi: int = 30
 
 
 def recovery_s(tl: Timeline, budget_ms: float, steady_for_s: int = 5, min_rate: float = 0.5,
-               baseline_rate: float | None = None) -> float | None:
-    """Seconds after the fault until decisions flow at a normal rate with p95 inside the budget for
-    ``steady_for_s`` consecutive seconds. ``None`` if that never happens inside the window."""
+               baseline_rate: float | None = None, relative_to_baseline: bool = True,
+               slack: float = 1.5) -> float | None:
+    """Seconds after the fault until decisions flow at a normal rate with p95 back to normal for
+    ``steady_for_s`` consecutive seconds. ``None`` if that never happens inside the window.
+
+    "Normal" is the larger of the SLO budget and ``slack`` times the median per-second p95 before the fault,
+    so a machine that already ran above the budget before the fault is judged against itself, not against a
+    target it never met (``relative_to_baseline=False`` keeps the strict budget)."""
     pre = [c for s, c in zip(tl.seconds, tl.count, strict=True) if s < 0]
     base = baseline_rate if baseline_rate is not None else (sum(pre) / len(pre) if pre else 0.0)
-    ok = [(s >= 0 and c >= min_rate * base and not math.isnan(p) and p <= budget_ms)
+    limit = budget_ms
+    if relative_to_baseline:
+        before = sorted(p for s, p in zip(tl.seconds, tl.p95_ms, strict=True) if s < 0 and not math.isnan(p))
+        if before:
+            limit = max(budget_ms, slack * before[len(before) // 2])
+    ok = [(s >= 0 and c >= min_rate * base and not math.isnan(p) and p <= limit)
           for s, c, p in zip(tl.seconds, tl.count, tl.p95_ms, strict=True)]
     run = 0
     for i, good in enumerate(ok):

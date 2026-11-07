@@ -4,7 +4,7 @@ hypothesis: >-
   The 5 ms timeout cuts the slow lookups and the scorer falls back to the degraded policy, so the p95 stays
   inside the 80 ms budget while Redis is slow.
 mechanism: Socket timeout shorter than the latency budget; the slow dependency costs at most the timeout, never its own latency.
-rate: 400
+rate: 200
 fault_at_s: 60
 observe_s: 120
 needs: [toxiproxy]

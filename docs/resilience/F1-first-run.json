@@ -1,0 +1,19 @@
+{
+  "id": "F1",
+  "confirmed": false,
+  "fault": {
+    "type": "kill",
+    "service": "taskmanager"
+  },
+  "rate": 400,
+  "produced": 84000,
+  "lost": 0,
+  "duplicated_extra": 2530,
+  "recovery_s": null,
+  "longest_gap_s": 153.02,
+  "baseline_p95_ms": 8237.954503,
+  "degraded_share_after": 0.0,
+  "dlq_growth": 0,
+  "lost_sample": [],
+  "run_at": "2026-11-06T17:01:36"
+}

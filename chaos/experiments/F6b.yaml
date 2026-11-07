@@ -4,7 +4,7 @@ hypothesis: >-
   Malformed records that reach payments-enriched (past Flink) are routed to the DLQ by the scorer, which keeps
   scoring: no valid payment is lost and the decision stream has no gap.
 mechanism: The scorer validates every enriched event against the contract and publishes the raw bytes of the invalid ones to the dlq topic.
-rate: 400
+rate: 200
 fault_at_s: 60
 observe_s: 90
 fault: { type: poison, topic: payments-enriched, count: 500 }

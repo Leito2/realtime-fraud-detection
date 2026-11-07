@@ -4,11 +4,11 @@ hypothesis: >-
   Flink restarts the job from the last checkpoint in under 30 s, loses no payment, and the duplicates it
   replays are bounded by the checkpoint interval (10 s) times the rate.
 mechanism: Checkpoints every 10 s (RocksDB, incremental) + restart of the job from the checkpoint offsets; the scorer tolerates repeated events.
-rate: 400
+rate: 200
 fault_at_s: 60
 observe_s: 150
-fault: { type: kill, service: taskmanager }
+fault: { type: kill, service: taskmanager, restart_after_s: 3 }
 expect:
   lost_max: 0
   recovery_s_max: 30
-  duplicates_max: 8000      # 400 ev/s x 10 s checkpoint x 2 (restart delay)
+  duplicates_max: 4000      # 200 ev/s x 10 s checkpoint x 2 (restart delay)

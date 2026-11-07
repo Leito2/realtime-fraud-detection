@@ -90,7 +90,8 @@ def write_report(exp: Experiment, out: Outcome, confirmed: bool, checks: list[st
         f"| payments produced | {v.produced} |",
         f"| lost (produced, never decided) | {v.lost_count} |",
         f"| duplicated decisions (extra copies) | {v.duplicate_extra} |",
-        f"| recovery (rate and p95 inside {exp.budget_ms:.0f} ms back for 5 s) | {recovery} |",
+        f"| recovery (rate back and p95 back to normal for 5 s; normal = max({exp.budget_ms:.0f} ms, "
+        f"1.5 x the pre-fault median p95)) | {recovery} |",
         f"| longest silence of the decisions topic | {out.longest_gap_s:.1f} s |",
         f"| p95 before the fault | {out.baseline_p95_ms:.1f} ms |",
         f"| degraded decisions after the fault | {out.degraded_share_after:.0%} |",

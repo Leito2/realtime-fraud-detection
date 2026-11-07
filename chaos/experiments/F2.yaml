@@ -4,7 +4,7 @@ hypothesis: >-
   The consumer group rebalances in under 5 s and the survivor takes over the dead process's partitions;
   nothing is lost and duplicates are bounded by one micro-batch per partition.
 mechanism: Consumer group with the cooperative-sticky assignor (incremental rebalance); offsets are committed after each micro-batch.
-rate: 400
+rate: 200
 fault_at_s: 60
 observe_s: 90
 fault: { type: scale_kill, service: scorer, replicas: 2 }

@@ -35,6 +35,19 @@ def test_recovery_is_when_rate_and_p95_are_back_for_a_sustained_stretch():
     assert recovery_s(tl, budget_ms=80) == 20.0          # outage 0-12, slow 12-20, healthy from second 20
 
 
+def test_a_system_that_was_already_slower_than_the_budget_recovers_to_its_own_baseline():
+    """On a loaded machine the steady p95 can sit above 80 ms: recovery means 'back to normal'."""
+    out = []
+    for sec in range(-30, 120):
+        if 0 <= sec < 12:
+            continue
+        lat = 3000.0 if 12 <= sec < 25 else 300.0
+        out += [d(f"{sec}-{i}", 1000.0 + sec + i / 20, lat) for i in range(20)]
+    tl = timeline(out, fault_s=1000.0)
+    assert recovery_s(tl, budget_ms=80) == 25.0
+    assert recovery_s(tl, budget_ms=80, relative_to_baseline=False) is None
+
+
 def test_a_system_that_never_recovers_reports_none():
     tl = timeline(steady(1000.0, outage=(0, 500)), fault_s=1000.0)
     assert recovery_s(tl, budget_ms=80) is None

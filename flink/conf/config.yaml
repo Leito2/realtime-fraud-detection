@@ -20,6 +20,14 @@ taskmanager:
   memory:
     process:
       size: 1200m
+heartbeat:
+  interval: 2 s              # default 10 s; a killed TaskManager is noticed after `timeout`, not after TCP gives up (F1)
+  timeout: 10 s              # default 50 s: the dominant part of the 78 s outage measured in F1 (see docs/resilience)
+restart-strategy:
+  type: fixed-delay
+  fixed-delay:
+    attempts: 2147483647
+    delay: 1 s
 parallelism:
   default: 2
 execution:

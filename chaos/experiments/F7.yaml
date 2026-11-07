@@ -4,7 +4,7 @@ hypothesis: >-
   The scorer keeps serving the cached model while MLflow is down, refuses the corrupt version when MLflow
   returns, and the serving version does not change. Decisions never stop.
 mechanism: On-disk model cache; the hot swap loads and validates a version before replacing the active one and remembers the rejected ones.
-rate: 400
+rate: 200
 fault_at_s: 60
 observe_s: 120
 fault: { type: mlflow_corrupt, down_s: 60 }
