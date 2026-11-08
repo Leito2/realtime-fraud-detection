@@ -1,0 +1,17 @@
+realtime-fraud-detection-generator-run-c3e4f8ec3e39	100.2MiB / 1GiB	9.29%
+realtime-fraud-detection-latency-run-e4af9f83ab80	17.85MiB / 200MiB	0.05%
+realtime-fraud-detection-scorer-1	136.8MiB / 300MiB	2.21%
+realtime-fraud-detection-feature-writer-1	47.37MiB / 150MiB	0.21%
+realtime-fraud-detection-kafka-1	533.3MiB / 850MiB	26.03%
+realtime-fraud-detection-taskmanager-1	464.8MiB / 1.221GiB	21.72%
+realtime-fraud-detection-jobmanager-1	322.5MiB / 850MiB	0.59%
+realtime-fraud-detection-explainer-1	35.38MiB / 300MiB	0.07%
+realtime-fraud-detection-redis-1	27.57MiB / 200MiB	0.14%
+realtime-fraud-detection-toxiproxy-1	1.086MiB / 64MiB	0.00%
+realtime-fraud-detection-s3-1	87.86MiB / 300MiB	0.34%
+realtime-fraud-detection-postgres-1	38.25MiB / 250MiB	0.00%
+realtime-fraud-detection-grafana-1	147.9MiB / 256MiB	0.14%
+realtime-fraud-detection-prometheus-1	159.7MiB / 350MiB	0.30%
+realtime-fraud-detection-kafka-exporter-1	19.93MiB / 64MiB	0.00%
+realtime-fraud-detection-redis-exporter-1	13.5MiB / 48MiB	0.00%
+realtime-fraud-detection-mlflow-1	118.4MiB / 500MiB	1.02%

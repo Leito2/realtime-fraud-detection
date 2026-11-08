@@ -1,0 +1,36 @@
+{
+  "rate": 200,
+  "duration_s": 90,
+  "rows": [
+    {
+      "variant": "processing time",
+      "sent": 18000,
+      "decided": 18000,
+      "lost": 0,
+      "p50": 15.927,
+      "p95": 29.935,
+      "p99": 75.967,
+      "gen_valid": true
+    },
+    {
+      "variant": "event time, 0.5 s out-of-orderness",
+      "sent": 18000,
+      "decided": 17899,
+      "lost": 101,
+      "p50": 831.999,
+      "p95": 1055.743,
+      "p99": 1221.631,
+      "gen_valid": true
+    },
+    {
+      "variant": "event time, 2 s out-of-orderness",
+      "sent": 18000,
+      "decided": 17590,
+      "lost": 410,
+      "p50": 2338.815,
+      "p95": 2562.047,
+      "p99": 2787.327,
+      "gen_valid": true
+    }
+  ]
+}

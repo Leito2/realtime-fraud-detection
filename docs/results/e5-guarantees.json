@@ -1,0 +1,50 @@
+{
+  "rate": 200,
+  "duration_s": 90,
+  "rows": [
+    {
+      "variant": "at-least-once, checkpoint 10 s",
+      "sent": 18000,
+      "decided": 18000,
+      "lost": 0,
+      "p50": 15.055,
+      "p95": 25.055,
+      "p99": 44.063,
+      "gen_valid": true,
+      "lag_stable": true
+    },
+    {
+      "variant": "exactly-once, checkpoint 1 s",
+      "sent": 18000,
+      "decided": 18000,
+      "lost": 0,
+      "p50": 642.047,
+      "p95": 1089.535,
+      "p99": 1146.879,
+      "gen_valid": true,
+      "lag_stable": true
+    },
+    {
+      "variant": "exactly-once, checkpoint 5 s",
+      "sent": 18000,
+      "decided": 18000,
+      "lost": 0,
+      "p50": 2844.671,
+      "p95": 5787.647,
+      "p99": 8937.471,
+      "gen_valid": true,
+      "lag_stable": true
+    },
+    {
+      "variant": "exactly-once, checkpoint 10 s",
+      "sent": 18000,
+      "decided": 18000,
+      "lost": 0,
+      "p50": 5562.367,
+      "p95": 10043.391,
+      "p99": 10649.599,
+      "gen_valid": true,
+      "lag_stable": true
+    }
+  ]
+}

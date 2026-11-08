@@ -1,0 +1,58 @@
+{
+  "rate": 400,
+  "duration_s": 90,
+  "rows": [
+    {
+      "flink_parallelism": 2,
+      "scorers": 1,
+      "sent": 36000,
+      "lost": 0,
+      "p50": 18.175,
+      "p95": 56.191,
+      "p99": 116.223,
+      "lag_stable": true,
+      "lag_max": 24,
+      "gen_valid": true,
+      "docker_stats": "realtime-fraud-detection-generator-run-27f57c3e8e9a\t102.9MiB / 1GiB\t21.24%\nrealtime-fraud-detection-latency-run-0c4371a2c527\t18.23MiB / 200MiB\t7.15%\nrealtime-fraud-detection-scorer-1\t196.1MiB / 300MiB\t32.42%\nrealtime-fraud-detection-feature-writer-1\t48.89MiB / 150MiB\t9.12%\nrealtime-fraud-detection-kafka-1\t598.6MiB / 850MiB\t95.97%\nrealtime-fraud-detection-taskmanager-1\t488.6MiB / 1.221GiB\t63.56%\nrealtime-fraud-detection-jobmanager-1\t327.5MiB / 850MiB\t1.48%\nrealtime-fraud-detection-explainer-1\t39.59MiB / 300MiB\t6.54%\nrealtime-fraud-detection-redis-1\t29.46MiB / 200MiB\t2.35%\nrealtime-fraud-detection-toxiproxy-1\t1.078MiB / 64MiB\t0.00%\nrealtime-fraud-detection-s3-1\t94.93MiB / 300MiB\t0.33%\nrealtime-fraud-detection-postgres-1\t42.71MiB / 250MiB\t0.00%\nrealtime-fraud-detection-grafana-1\t176.8MiB / 256MiB\t0.17%\nrealtime-fraud-detection-prometheus-1\t167.9MiB / 350MiB\t0.98%\nrealtime-fraud-detection-kafka-exporter-1\t21.26MiB / 64MiB\t10.27%\nrealtime-fraud-detection-redis-exporter-1\t16.06MiB / 48MiB\t1.30%\nrealtime-fraud-detection-mlflow-1\t125.8MiB / 500MiB\t14.89%\n"
+    },
+    {
+      "flink_parallelism": 2,
+      "scorers": 2,
+      "sent": 36000,
+      "lost": 1,
+      "p50": 21.951,
+      "p95": 185.471,
+      "p99": 679.423,
+      "lag_stable": true,
+      "lag_max": 95,
+      "gen_valid": false,
+      "docker_stats": "realtime-fraud-detection-generator-run-9ab6df1d08ec\t102.3MiB / 1GiB\t24.29%\nrealtime-fraud-detection-latency-run-969bd6e01175\t18.22MiB / 200MiB\t9.51%\nrealtime-fraud-detection-scorer-2\t176.7MiB / 300MiB\t25.52%\nrealtime-fraud-detection-scorer-1\t189.7MiB / 300MiB\t22.29%\nrealtime-fraud-detection-feature-writer-1\t47.73MiB / 150MiB\t11.07%\nrealtime-fraud-detection-kafka-1\t602.8MiB / 850MiB\t218.75%\nrealtime-fraud-detection-taskmanager-1\t554.9MiB / 1.221GiB\t110.49%\nrealtime-fraud-detection-jobmanager-1\t301.4MiB / 850MiB\t1.34%\nrealtime-fraud-detection-explainer-1\t37.59MiB / 300MiB\t8.57%\nrealtime-fraud-detection-redis-1\t28.3MiB / 200MiB\t2.72%\nrealtime-fraud-detection-toxiproxy-1\t1.074MiB / 64MiB\t0.00%\nrealtime-fraud-detection-s3-1\t85.5MiB / 300MiB\t0.45%\nrealtime-fraud-detection-postgres-1\t40.29MiB / 250MiB\t0.00%\nrealtime-fraud-detection-grafana-1\t158MiB / 256MiB\t0.15%\nrealtime-fraud-detection-prometheus-1\t156.8MiB / 350MiB\t0.38%\nrealtime-fraud-detection-kafka-exporter-1\t19.79MiB / 64MiB\t0.00%\nrealtime-fraud-detection-redis-exporter-1\t14.68MiB / 48MiB\t0.00%\nrealtime-fraud-detection-mlflow-1\t121MiB / 500MiB\t17.86%\n"
+    },
+    {
+      "flink_parallelism": 4,
+      "scorers": 1,
+      "sent": 36000,
+      "lost": 0,
+      "p50": 18.255,
+      "p95": 53.279,
+      "p99": 125.311,
+      "lag_stable": true,
+      "lag_max": 28,
+      "gen_valid": true,
+      "docker_stats": "realtime-fraud-detection-generator-run-835f0112f850\t100.9MiB / 1GiB\t24.21%\nrealtime-fraud-detection-latency-run-75d9032f9dd1\t18.16MiB / 200MiB\t6.53%\nrealtime-fraud-detection-scorer-1\t186.7MiB / 300MiB\t29.24%\nrealtime-fraud-detection-feature-writer-1\t46.72MiB / 150MiB\t9.26%\nrealtime-fraud-detection-kafka-1\t528.7MiB / 850MiB\t91.50%\nrealtime-fraud-detection-taskmanager-1\t534.4MiB / 1.221GiB\t67.30%\nrealtime-fraud-detection-jobmanager-1\t313.3MiB / 850MiB\t1.29%\nrealtime-fraud-detection-explainer-1\t36.49MiB / 300MiB\t5.59%\nrealtime-fraud-detection-redis-1\t28.09MiB / 200MiB\t2.15%\nrealtime-fraud-detection-toxiproxy-1\t1.082MiB / 64MiB\t0.00%\nrealtime-fraud-detection-s3-1\t91.95MiB / 300MiB\t0.26%\nrealtime-fraud-detection-postgres-1\t39.39MiB / 250MiB\t0.00%\nrealtime-fraud-detection-grafana-1\t150.7MiB / 256MiB\t0.16%\nrealtime-fraud-detection-prometheus-1\t160.5MiB / 350MiB\t0.47%\nrealtime-fraud-detection-kafka-exporter-1\t20.02MiB / 64MiB\t4.63%\nrealtime-fraud-detection-redis-exporter-1\t14.32MiB / 48MiB\t1.31%\nrealtime-fraud-detection-mlflow-1\t118.8MiB / 500MiB\t0.13%\n"
+    },
+    {
+      "flink_parallelism": 4,
+      "scorers": 2,
+      "sent": 36000,
+      "lost": 0,
+      "p50": 20.399,
+      "p95": 70.911,
+      "p99": 139.007,
+      "lag_stable": true,
+      "lag_max": 32,
+      "gen_valid": true,
+      "docker_stats": "realtime-fraud-detection-generator-run-04c149b119ee\t100.8MiB / 1GiB\t22.60%\nrealtime-fraud-detection-latency-run-e1b4ea9832c8\t18.45MiB / 200MiB\t8.26%\nrealtime-fraud-detection-scorer-2\t135.8MiB / 300MiB\t24.43%\nrealtime-fraud-detection-scorer-1\t189.5MiB / 300MiB\t21.53%\nrealtime-fraud-detection-feature-writer-1\t46.69MiB / 150MiB\t9.96%\nrealtime-fraud-detection-kafka-1\t520.9MiB / 850MiB\t124.87%\nrealtime-fraud-detection-taskmanager-1\t607.5MiB / 1.221GiB\t97.26%\nrealtime-fraud-detection-jobmanager-1\t315.2MiB / 850MiB\t8.21%\nrealtime-fraud-detection-explainer-1\t35.48MiB / 300MiB\t7.36%\nrealtime-fraud-detection-redis-1\t27.52MiB / 200MiB\t2.90%\nrealtime-fraud-detection-toxiproxy-1\t1.082MiB / 64MiB\t0.00%\nrealtime-fraud-detection-s3-1\t88.92MiB / 300MiB\t0.25%\nrealtime-fraud-detection-postgres-1\t38.54MiB / 250MiB\t0.00%\nrealtime-fraud-detection-grafana-1\t143.5MiB / 256MiB\t0.17%\nrealtime-fraud-detection-prometheus-1\t157.7MiB / 350MiB\t0.71%\nrealtime-fraud-detection-kafka-exporter-1\t18.86MiB / 64MiB\t0.00%\nrealtime-fraud-detection-redis-exporter-1\t15.37MiB / 48MiB\t1.16%\nrealtime-fraud-detection-mlflow-1\t122MiB / 500MiB\t3.26%\n"
+    }
+  ]
+}

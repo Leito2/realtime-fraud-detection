@@ -1,9 +1,10 @@
 """E10 (PLAN.md 5.6): where does each stage saturate? Scorer processes x Flink parallelism.
 
-    uv run python scripts/e10_scaling.py [--rate 2000] [--duration 90] [--warmup 30]
+    uv run python scripts/e10_scaling.py [--rate 400] [--duration 90] [--warmup 30]
 
-At one fixed offered rate, scale the scorer to 1, 2 and 4 processes (one consumer group, partitions are
-shared) and run the Flink job at parallelism 2 and 4. Each cell reports the end-to-end percentiles, whether
+At one fixed offered rate, scale the scorer to 1 and 2 processes (4 do not fit in 8 GB; one consumer group,
+partitions are shared) and run the Flink job at parallelism 2 and 4. Each cell reports the end-to-end
+percentiles, whether
 the consumer lag stayed flat and the container CPU: the stage whose CPU sits at its limit while the lag
 grows is the bottleneck. On an 8 GB laptop with one generator the 4-process rows may be limited by the
 machine, not by the design; the README says so. Run it on a quiet machine; it restores the default stack.
@@ -37,10 +38,10 @@ def scale_scorer(replicas: int) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rate", type=int, default=2000)
+    ap.add_argument("--rate", type=int, default=400)
     ap.add_argument("--duration", type=int, default=90)
     ap.add_argument("--warmup", type=int, default=30)
-    ap.add_argument("--scorers", type=int, nargs="+", default=[1, 2, 4])
+    ap.add_argument("--scorers", type=int, nargs="+", default=[1, 2])
     ap.add_argument("--parallelism", type=int, nargs="+", default=[2, 4])
     args = ap.parse_args()
 

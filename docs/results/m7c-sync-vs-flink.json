@@ -1,0 +1,45 @@
+{
+  "events": 600000,
+  "by_writer_delay_s": {
+    "0.0": {
+      "events": 600000,
+      "exact_share": 0.8905666666666666,
+      "cnt_error_min": 0,
+      "cnt_error_max": 17,
+      "cnt_error_mean": 0.190935,
+      "cnt_abs_error_p99": 3.0,
+      "over_count_share": 0.10943333333333333,
+      "under_count_share": 0.0
+    },
+    "0.5": {
+      "events": 600000,
+      "exact_share": 0.8897316666666667,
+      "cnt_error_min": -2,
+      "cnt_error_max": 17,
+      "cnt_error_mean": 0.19074,
+      "cnt_abs_error_p99": 3.0,
+      "over_count_share": 0.10959333333333333,
+      "under_count_share": 0.000495
+    },
+    "1.0": {
+      "events": 600000,
+      "exact_share": 0.888925,
+      "cnt_error_min": -2,
+      "cnt_error_max": 17,
+      "cnt_error_mean": 0.19063166666666667,
+      "cnt_abs_error_p99": 3.0,
+      "over_count_share": 0.10975333333333333,
+      "under_count_share": 0.0009633333333333333
+    },
+    "2.0": {
+      "events": 600000,
+      "exact_share": 0.88721,
+      "cnt_error_min": -2,
+      "cnt_error_max": 17,
+      "cnt_error_mean": 0.19038666666666668,
+      "cnt_abs_error_p99": 3.0,
+      "over_count_share": 0.11012,
+      "under_count_share": 0.00194
+    }
+  }
+}

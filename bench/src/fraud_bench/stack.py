@@ -55,7 +55,7 @@ def submit_flink(variant: dict | None = None, sql: str | None = None) -> None:
     CHECKPOINT_INTERVAL, DELIVERY_GUARANTEE, WATERMARK_DELAY. ``sql`` names a file under /opt/flink/sql."""
     cmd = [*COMPOSE, "--profile", "core", "run", "--rm", "-T", "flink-job"]
     if sql:
-        cmd.append(f"/opt/flink/sql/{sql}")
+        cmd += ["/opt/flink/submit-job.sh", f"/opt/flink/sql/{sql}"]   # run replaces the command
     run = subprocess.run(cmd, cwd=ROOT, env={**os.environ, **{k: str(v) for k, v in (variant or {}).items()}},
                          capture_output=True, text=True, encoding="utf-8")
     if run.returncode:
@@ -91,14 +91,15 @@ def ensure_stack(env: dict | None = None) -> None:
 
 def run_load(rate: int, duration: int, procs: int = 1, label: str | None = None, warmup_s: int = 5,
              warmup_rate: int | None = None, hooks: list[Hooks] | None = None,
-             out_dir: Path | None = None) -> dict:
+             out_dir: Path | None = None, idle_timeout_s: int = 8) -> dict:
     """Warm up (discarded), then push open-loop load while the collector listens. Returns the measurements."""
     print(f"warm-up {warmup_s} s (discarded) ...")
     sh([*TOOLS, "generator", "--rate", str(warmup_rate or min(rate, 500)), "--duration", str(warmup_s),
         "--procs", str(procs)])
 
-    collector = subprocess.Popen([*TOOLS, "latency", "--idle-timeout", "8"], cwd=ROOT, text=True,
-                                 encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    collector = subprocess.Popen([*TOOLS, "latency", "--idle-timeout", str(idle_timeout_s)], cwd=ROOT,
+                                 text=True, encoding="utf-8", stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT)
     for line in collector.stdout:                    # wait until the collector owns its partitions
         if line.strip() == "READY":
             break
