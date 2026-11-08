@@ -40,7 +40,8 @@ def _new_run(experiment: str, params: dict):
     run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{experiment}"
     out = ROOT / "docs" / "results" / run_id
     out.mkdir(parents=True, exist_ok=True)
-    (out / "manifest.json").write_text(json.dumps(manifest.collect(run_id, experiment, params), indent=2),
+    shown = {k: v for k, v in params.items() if not callable(v)}   # argparse puts the handler in vars(args)
+    (out / "manifest.json").write_text(json.dumps(manifest.collect(run_id, experiment, shown), indent=2),
                                        encoding="utf-8")
     return run_id, out
 
