@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 PROFILE ?= core
-.PHONY: proto datalake backtest drift-report drift-demo help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train train-challenger promote history trace-up shadow
+.PHONY: proto datalake backtest drift-report drift-demo help doctor setup up down ps logs test lint fmt smoke profiles parity bench chaos train train-challenger promote history trace-up shadow e4 e5 e6 e10 sync-vs-flink
 
 help:      ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
@@ -57,3 +57,13 @@ bench:     ## Load protocol E1 (rate steps x3, p95/p99, sustained throughput); B
 	uv run python -m fraud_bench.run e1 $(BENCH_ARGS)
 chaos:     ## Failure experiment with a written hypothesis: make chaos EXP=F1 (report in docs/resilience/)
 	uv run chaos $(EXP)
+e4:        ## E4: native vs ONNX in-process vs Triton, per batch size (stack + serving-triton up; QUIET MACHINE)
+	docker compose --profile core --profile serving-triton --profile tools run --rm -T e4 micro $(E4_ARGS)
+e5:        ## E5: cost of exactly-once vs at-least-once (checkpoint 1/5/10 s) -> docs/results/e5-guarantees.md
+	uv run python scripts/e5_guarantees.py $(E5_ARGS)
+e6:        ## E6: processing-time vs event-time window (watermark cost) -> docs/results/e6-event-time.md
+	uv run python scripts/e6_event_time.py $(E6_ARGS)
+e10:       ## E10: scorer processes x Flink parallelism at a fixed rate -> docs/results/e10-scaling.md
+	uv run python scripts/e10_scaling.py $(E10_ARGS)
+sync-vs-flink:  ## ADR-0012: error of synchronous velocity vs the Flink window -> docs/results/m7c-sync-vs-flink.md
+	uv run python -m fraud_bench.sync_vs_flink $(SVF_ARGS)

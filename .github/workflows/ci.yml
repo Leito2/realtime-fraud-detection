@@ -23,3 +23,26 @@ jobs:
         run: uv run lint-imports --config services/explainer/pyproject.toml
       - name: Test
         run: uv run pytest -q
+
+  proto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0              # buf breaking compares against the target branch
+      - name: buf lint and breaking-change check
+        uses: bufbuild/buf-action@v1
+        with:
+          lint: true
+          breaking: ${{ github.event_name == 'pull_request' }}
+          breaking_against: "https://github.com/${{ github.repository }}.git#branch=main"
+          push: false
+          pr_comment: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Generated stubs match proto/ (run `make proto` if this fails)
+        run: |
+          uv sync --all-packages --dev
+          make proto
+          git diff --exit-code packages/fraudproto

@@ -1,9 +1,12 @@
 # buf: lint + breaking-change detection for the gRPC contract (PLAN §14). CI runs `buf lint` and
-# `buf breaking --against '.git#branch=main'` once the gRPC milestone lands.
+# `buf breaking` against main on pull requests (.github/workflows/ci.yml, job `proto`).
 version: v2
 modules:
   - path: proto
 lint:
   use: [STANDARD]
+  # v1 is a published contract (PLAN §14): renaming FraudScoring or splitting the shared Score messages would be a
+  # breaking change for no gain. The RPCs deliberately share request and response types (Score, ScoreStream, GetDecision).
+  except: [SERVICE_SUFFIX, RPC_REQUEST_RESPONSE_UNIQUE, RPC_REQUEST_STANDARD_NAME, RPC_RESPONSE_STANDARD_NAME]
 breaking:
   use: [FILE]

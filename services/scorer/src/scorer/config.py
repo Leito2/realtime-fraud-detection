@@ -16,6 +16,7 @@ class Settings:
     input_topic: str
     output_topic: str
     dlq_topic: str
+    isolation_level: str
     redis_url: str
     redis_timeout_s: float
     redis_deadline_s: float
@@ -73,6 +74,8 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
         input_topic=kafka["input_topic"],
         output_topic=kafka["shadow_topic"] if shadow else kafka["output_topic"],
         dlq_topic=kafka["dlq_topic"],
+        isolation_level=(os.environ.get("KAFKA_ISOLATION_LEVEL")
+                         or kafka.get("isolation_level", "read_uncommitted")),
         redis_url=os.environ.get("REDIS_URL", scorer["redis"]["url"]),
         redis_timeout_s=scorer["redis"]["timeout_ms"] / 1000,
         redis_deadline_s=scorer["redis"].get("deadline_ms", 25) / 1000,

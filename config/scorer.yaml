@@ -5,6 +5,7 @@ serving: { mode: onnx, triton: { url: "triton:8001", repository: /triton-models,
 redis: { url: "redis://redis:6379/0", timeout_ms: 8, deadline_ms: 30, breaker_open_s: 1.0, breaker_failures: 3 }
 model: { name: fraud-champion, champion_alias: champion, challenger_alias: challenger, poll_seconds: 5 }
 mlflow: { tracking_uri: "http://mlflow:5000" }
-kafka: { bootstrap: "kafka:29092", input_topic: payments-enriched, output_topic: decisions, shadow_topic: shadow-scores, dlq_topic: dlq }
+kafka: { bootstrap: "kafka:29092", input_topic: payments-enriched, output_topic: decisions, shadow_topic: shadow-scores, dlq_topic: dlq,
+         isolation_level: read_uncommitted }   # read_committed only with Flink exactly-once (E5, F10)
 grpc: { port: 50051, stream_max_messages: 32, stream_max_wait_ms: 5, workers: 4, metrics_port: 9103 }
 log_features: false     # true: decisions carry the served feature vector (feedback dataset); costs bytes on the critical path

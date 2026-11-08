@@ -75,3 +75,13 @@ def test_guard_adds_statistics_and_exits_when_the_consumer_never_becomes_steady(
                  exit_fn=lambda c: (codes.append(c), done.set()))
     assert conf["group.id"] == "g" and conf["statistics.interval.ms"] == 5000 and callable(conf["stats_cb"])
     assert done.wait(2.0) and codes == [3]
+
+
+def test_guard_sets_a_short_session_timeout_unless_the_caller_chose_one():
+    """librdkafka waits 45 s before the broker drops a dead member (F2: 48 s of silence)."""
+    from fraudcore.watchdog import guard
+
+    default = guard({"group.id": "g"}, exit_fn=lambda c: None, poll_s=3600)
+    assert default["session.timeout.ms"] == 10000 and default["heartbeat.interval.ms"] == 2000
+    chosen = guard({"group.id": "g", "session.timeout.ms": 30000}, exit_fn=lambda c: None, poll_s=3600)
+    assert chosen["session.timeout.ms"] == 30000

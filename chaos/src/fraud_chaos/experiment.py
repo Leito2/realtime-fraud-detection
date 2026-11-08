@@ -25,6 +25,7 @@ class Experiment:
     needs: list[str] = field(default_factory=list)       # extra compose services the experiment requires
     env: dict = field(default_factory=dict)              # compose variables for the services it recreates
     recreate: list[str] = field(default_factory=list)    # services restarted with ``env`` before the load
+    flink: dict = field(default_factory=dict)            # job variant (flink/submit-job.sh overrides)
     expect: dict = field(default_factory=dict)
     mechanism: str = ""
 

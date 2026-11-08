@@ -15,6 +15,13 @@ def test_repo_config_loads_and_maps_the_alias_to_the_mode(monkeypatch):
     assert champion.max_messages == 500 and champion.max_wait_s == 0.005
 
 
+def test_isolation_level_defaults_to_uncommitted_and_follows_the_environment(monkeypatch):
+    monkeypatch.delenv("KAFKA_ISOLATION_LEVEL", raising=False)
+    assert config.load(CONFIG_DIR).isolation_level == "read_uncommitted"
+    monkeypatch.setenv("KAFKA_ISOLATION_LEVEL", "read_committed")
+    assert config.load(CONFIG_DIR).isolation_level == "read_committed"
+
+
 def test_batch_size_and_wait_can_be_overridden_for_experiment_e2(monkeypatch):
     monkeypatch.setenv("BATCH_MAX_MESSAGES", "50")
     monkeypatch.setenv("BATCH_MAX_WAIT_MS", "20")

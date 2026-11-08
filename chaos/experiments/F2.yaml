@@ -1,8 +1,10 @@
 id: F2
 title: One of two scorer processes dies
 hypothesis: >-
-  The consumer group rebalances in under 5 s and the survivor takes over the dead process's partitions;
-  nothing is lost and duplicates are bounded by one micro-batch per partition.
+  With a 10 s session timeout the survivor takes over the dead process's partitions within one session timeout
+  plus one rebalance (under 15 s of silence); nothing is lost and duplicates are bounded by one micro-batch per
+  partition. Round 1 assumed a rebalance in under 5 s with librdkafka's 45 s default and was refuted (48 s of
+  silence, see F2-default-session-timeout).
 mechanism: Consumer group with the cooperative-sticky assignor (incremental rebalance); offsets are committed after each micro-batch.
 rate: 200
 fault_at_s: 60
@@ -10,5 +12,6 @@ observe_s: 90
 fault: { type: scale_kill, service: scorer, replicas: 2 }
 expect:
   lost_max: 0
-  recovery_s_max: 15
+  gap_s_max: 15
+  recovery_s_max: 30
   duplicates_max: 6000      # 12 partitions x one 500-message micro-batch

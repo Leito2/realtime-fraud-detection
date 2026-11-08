@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -36,6 +37,31 @@ def flink_job_running() -> bool:
     except Exception:
         return False
     return any(j["state"] == "RUNNING" for j in jobs)
+
+
+def cancel_flink_jobs() -> None:
+    """Cancel every RUNNING job on the session cluster (the next submit starts from the latest offsets)."""
+    with urllib.request.urlopen("http://localhost:8081/jobs/overview", timeout=5) as r:
+        jobs = json.load(r)["jobs"]
+    for j in jobs:
+        if j["state"] == "RUNNING":
+            req = urllib.request.Request(f"http://localhost:8081/jobs/{j['jid']}?mode=cancel", method="PATCH")
+            urllib.request.urlopen(req, timeout=5).read()
+    wait(lambda: not flink_job_running(), "job cancelled", 60)
+
+
+def submit_flink(variant: dict | None = None, sql: str | None = None) -> None:
+    """Submit the feature job with experiment overrides (see flink/submit-job.sh): BUFFER_TIMEOUT,
+    CHECKPOINT_INTERVAL, DELIVERY_GUARANTEE, WATERMARK_DELAY. ``sql`` names a file under /opt/flink/sql."""
+    cmd = [*COMPOSE, "--profile", "core", "run", "--rm", "-T", "flink-job"]
+    if sql:
+        cmd.append(f"/opt/flink/sql/{sql}")
+    run = subprocess.run(cmd, cwd=ROOT, env={**os.environ, **{k: str(v) for k, v in (variant or {}).items()}},
+                         capture_output=True, text=True, encoding="utf-8")
+    if run.returncode:
+        raise RuntimeError(f"flink submit failed: {run.stderr.strip()[-300:]}")
+    wait(flink_job_running, "job RUNNING", 120)
+    time.sleep(5)
 
 
 def wait(cond, what: str, timeout: float, every: float = 2.0) -> None:

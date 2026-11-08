@@ -13,7 +13,16 @@ import threading
 import time
 
 from fraud_bench.kafka_lag import end_offsets_total
-from fraud_bench.stack import COMPOSE, ROOT, TOOLS, flink_job_running, sh, wait
+from fraud_bench.stack import (
+    COMPOSE,
+    ROOT,
+    TOOLS,
+    cancel_flink_jobs,
+    flink_job_running,
+    sh,
+    submit_flink,
+    wait,
+)
 from pydantic import ValidationError
 
 from fraud_chaos import faults, registry
@@ -49,6 +58,9 @@ def up(*services: str, env: dict | None = None) -> None:
 def ensure_stack(exp: Experiment) -> None:
     if exp.needs:
         up(*exp.needs)
+    if exp.flink:
+        cancel_flink_jobs()
+        submit_flink(exp.flink)                            # e.g. exactly-once (F10)
     if exp.recreate:
         up(*exp.recreate, env={k: str(v) for k, v in exp.env.items()})
         time.sleep(15)                                     # the recreated services join their groups
@@ -58,6 +70,9 @@ def ensure_stack(exp: Experiment) -> None:
 def reset_stack(exp: Experiment) -> None:
     """Leave the stack as the next experiment expects it: services up, default environment."""
     sh([*COMPOSE, "start", "kafka", "redis", "taskmanager", "mlflow"])
+    if exp.flink:
+        cancel_flink_jobs()
+        submit_flink()                                     # back to the default job
     if exp.recreate:
         up(*exp.recreate)
 

@@ -209,6 +209,7 @@ services:
       BATCH_MAX_WAIT_MS: "${BATCH_MAX_WAIT_MS:-}"
       LOG_FEATURES: "${LOG_FEATURES:-}"      # 1: decisions carry the served features (feedback dataset)
       MODEL_CACHE_DIR: /cache            # last downloaded models: the scorer survives MLflow being down (F7)
+      KAFKA_ISOLATION_LEVEL: "${KAFKA_ISOLATION_LEVEL:-}"      # read_committed with Flink exactly-once (F10)
       SERVING_MODE: "${SERVING_MODE:-}"      # empty = config/scorer.yaml (onnx); "triton" = experiment E4
       TRITON_URL: "${TRITON_URL:-triton:8001}"
     volumes: ["./config:/app/config:ro", "model-cache:/cache", "triton-models:/triton-models"]

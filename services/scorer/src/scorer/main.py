@@ -43,6 +43,7 @@ def main() -> None:
     consumer = Consumer(guard({
         "bootstrap.servers": cfg.bootstrap, "group.id": cfg.group, "enable.auto.commit": False,
         "auto.offset.reset": "earliest", "fetch.wait.max.ms": 5,
+        "isolation.level": cfg.isolation_level,        # read_committed with a transactional Flink sink (F10)
         "partition.assignment.strategy": "cooperative-sticky",  # peers keep their partitions (F2)
     }))
     consumer.subscribe([cfg.input_topic])

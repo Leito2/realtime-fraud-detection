@@ -71,4 +71,7 @@ def guard(conf: dict, max_unhealthy_s: float = 60.0, exit_fn: Callable[[int], No
                 return
 
     threading.Thread(target=watch, name="consumer-watchdog", daemon=True).start()
-    return {**conf, "statistics.interval.ms": 5000, "stats_cb": wd.on_stats}
+    # A dead member is only noticed after session.timeout.ms; librdkafka defaults to 45 s, which was the whole
+    # silence seen in F2 with one of two scorers killed. 10 s with a 2 s heartbeat tolerates a short stall.
+    return {"session.timeout.ms": 10000, "heartbeat.interval.ms": 2000, **conf,
+            "statistics.interval.ms": 5000, "stats_cb": wd.on_stats}
