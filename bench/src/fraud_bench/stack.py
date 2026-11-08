@@ -91,7 +91,8 @@ def ensure_stack(env: dict | None = None) -> None:
 
 def run_load(rate: int, duration: int, procs: int = 1, label: str | None = None, warmup_s: int = 5,
              warmup_rate: int | None = None, hooks: list[Hooks] | None = None,
-             out_dir: Path | None = None, idle_timeout_s: int = 8) -> dict:
+             out_dir: Path | None = None, idle_timeout_s: int = 8,
+             gen_args: list[str] | None = None) -> dict:
     """Warm up (discarded), then push open-loop load while the collector listens. Returns the measurements."""
     print(f"warm-up {warmup_s} s (discarded) ...")
     sh([*TOOLS, "generator", "--rate", str(warmup_rate or min(rate, 500)), "--duration", str(warmup_s),
@@ -107,8 +108,8 @@ def run_load(rate: int, duration: int, procs: int = 1, label: str | None = None,
     for h in hooks or []:
         h.start()
     gen = subprocess.Popen([*TOOLS, "generator", "--rate", str(rate), "--duration", str(duration),
-                            "--procs", str(procs)], cwd=ROOT, text=True, encoding="utf-8",
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                            "--procs", str(procs), *(gen_args or [])], cwd=ROOT, text=True,
+                           encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     time.sleep(duration / 2 + 3)
     stats = sh(["docker", "stats", "--no-stream", "--format", STATS_FORMAT]).stdout
     gen_out = gen.communicate()[0]

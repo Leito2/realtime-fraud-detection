@@ -257,6 +257,53 @@ from timestamps the scorer already measures, so the other 99% of events pay noth
 
 Measured on this stack: MLflow takes ~370 MB (its default job-executor pool is disabled; it was 900 MB), Grafana ~110 MB,
 Prometheus ~65 MB, both exporters under 30 MB.
+
+### Resilience: what happens when things break (F0-F10)
+
+Each experiment has a hypothesis written *before* the run, a fault injected at a fixed second under steady load
+(200 ev/s, about half of what this laptop sustains), and a verdict computed from the topics: every produced
+`payment_id` is compared with the decisions, so "lost" and "duplicated" are counts, not impressions. Recovery is
+the time until the rate and the p95 are back to the run's own pre-fault level for 5 s. Reports, with the chart
+and the full numbers, are in [`docs/resilience/`](docs/resilience/); the operational side is in
+[`docs/runbooks.md`](docs/runbooks.md). `make chaos EXP=F1` runs one.
+
+F0 is the control: the same run with nothing broken. It is what makes the other rows readable. An earlier round
+of F2, F4 and F8 "failed" or "passed" because the laptop was swapping, not because of the fault; those runs are
+kept next to the clean ones as `*-dirty-baseline` and are not used.
+
+| # | Fault | Verdict | Lost | Extra copies | Longest silence | Recovery | What it showed |
+|---|---|---|---|---|---|---|---|
+| F0 | none (control) | confirmed | 0 | 0 | 1.0 s | 4 s | the floor: p95 25 ms, nothing degraded |
+| F1 | Flink TaskManager killed | **refuted** | 0 | 1539 | 29.8 s | 39 s (limit 30 s) | nothing lost, duplicates are the at-least-once price |
+| F2 | one of two scorers killed | confirmed | 0 | 5 | 12.0 s | 5 s | survivor takes over after one session timeout |
+| F3 | Redis stopped 30 s | confirmed | 0 | 0 | 0.4 s | 0 s | breaker: 27% of decisions degraded, none late |
+| F4 | Redis +20 ms | confirmed | 0 | 0 | 0.8 s | 3 s | deadline keeps p95 at baseline, 48% degraded |
+| F5 | Kafka broker restarted (20 s down) | **refuted** | 0 | 4 | 130 s | 140 s (limit 120 s) | nothing lost, but the pipeline is silent far longer than the outage |
+| F6 | malformed payments | confirmed | 0 | 0 | 2.0 s | 5 s | invalid rows go to the DLQ, not into silence |
+| F6b | malformed enriched rows | confirmed | 0 | 0 | 0.5 s | 1 s | the scorer's DLQ takes them |
+| F7 | MLflow down + corrupt champion | confirmed | 0 | 0 | 3.3 s | 5 s | the previous model keeps serving |
+| F8 | LLM endpoint dies | confirmed | 0 | 0 | 0.6 s | 4 s | decisions never wait for the explainer |
+| F9 | 2x overload for 60 s | confirmed | 0 | 0 | 0.5 s | 5 s | lag grows, then drains; no component died |
+| F10 | TaskManager killed, exactly-once | confirmed | 0 | **0** | 24.1 s | 26 s | zero duplicates, at the cost of latency |
+
+Three results are worth reading as numbers rather than verdicts:
+
+* **At-least-once vs exactly-once (F1 vs F10, E5).** Killing the TaskManager produced 1539 duplicate decisions with
+  the default sink and 0 with a transactional sink. The price is latency, because a row becomes visible only when its
+  checkpoint commits: at 200 ev/s the p95 is 25 ms at-least-once and 1.1 s, 5.8 s and 10.0 s with a checkpoint every 1,
+  5 and 10 s (E5, table below). The duplicates are harmless here because the scorer dedupes by `payment_id` (ADR-4),
+  which is why at-least-once stays the default.
+* **A dead consumer is noticed after `session.timeout.ms` (F2).** With librdkafka's default of 45 s the surviving
+  scorer was silent for 48 s; with 10 s it takes over in 12 s (ADR-0015). The cost is a false rebalance when a
+  process stalls for more than 10 s, which does happen on a busy 8 GB laptop.
+* **Redis down is not an outage (F3, F4).** A hard deadline and a circuit breaker on the profile lookup (ADR-0014)
+  turn "Redis is gone" into "27% of decisions use the conservative degraded policy for a few seconds"; before them
+  every micro-batch blocked for about 4 s in name resolution.
+
+Two hypotheses were refuted and stay refuted: the Flink restart takes 39 s, not 30, and a 20 s broker restart
+leaves the decisions topic silent for 130 s, far longer than the outage. Neither lost an event. The cause of the
+130 s was not isolated; it is listed as open in PLAN §16 rather than explained by a guess.
+
 ## Part V — Run It Yourself
 
 ### Prerequisites
