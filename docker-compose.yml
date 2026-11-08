@@ -79,7 +79,11 @@ services:
     <<: *core
     restart: unless-stopped
     image: redis:8
-    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction", "--save", "", "--appendonly", "no"]
+    # AOF every second: a restart (F3) must not wipe the user profiles, which the scorer would silently replace
+    # with neutral defaults. At most one second of velocity state is lost, and the Feature Writer rebuilds it.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction", "--save", "",
+              "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes: ["redis-data:/data"]
     ports: ["6379:6379"]
     mem_limit: 200m
 
@@ -359,5 +363,6 @@ volumes:
   model-cache: {}
   model-cache-shadow: {}
   model-cache-grpc: {}
+  redis-data: {}
   model-cache-api: {}
   s3-data: {}

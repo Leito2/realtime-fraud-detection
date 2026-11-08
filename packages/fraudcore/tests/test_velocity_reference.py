@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from fraudcore.features import SMALL_TX_AMOUNT, WINDOW_S, velocity_reference
 
 
@@ -25,7 +27,8 @@ def test_old_payments_leave_the_window_with_an_inclusive_lower_bound():
     assert out[2]["f_sum_10m"] == 6.0
 
 
-def test_constants_match_the_flink_sql_job():
-    sql = (Path(__file__).resolve().parents[3] / "flink" / "sql" / "m1_passthrough.sql").read_text()
+@pytest.mark.parametrize("job", ["m1_passthrough.sql", "m8_validated.sql"])
+def test_constants_match_the_flink_sql_job(job):
+    sql = (Path(__file__).resolve().parents[3] / "flink" / "sql" / job).read_text()
     assert f"amount < {int(SMALL_TX_AMOUNT)}" in sql
     assert f"INTERVAL '{WINDOW_S // 60}' MINUTE PRECEDING" in sql

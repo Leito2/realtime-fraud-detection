@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from feature_writer.logic import latest_per_user
 from fraudcore.contracts import EnrichedPayment
 from fraudcore.keys import VELOCITY_TTL_S
+from fraudcore.watchdog import guard
 
 
 def main() -> None:
@@ -22,8 +23,8 @@ def main() -> None:
     ap.add_argument("--max-wait-s", type=float, default=0.05)
     args = ap.parse_args()
 
-    consumer = Consumer({"bootstrap.servers": args.bootstrap, "group.id": "feature-writer",
-                         "enable.auto.commit": False, "auto.offset.reset": "latest"})
+    consumer = Consumer(guard({"bootstrap.servers": args.bootstrap, "group.id": "feature-writer",
+                               "enable.auto.commit": False, "auto.offset.reset": "latest"}))
     consumer.subscribe([args.topic])
     r = redis.Redis.from_url(args.redis)
     stop = threading.Event()

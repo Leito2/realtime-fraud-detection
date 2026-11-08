@@ -57,11 +57,15 @@ def test_flink_velocity_matches_the_offline_reference():
     while not assigned and time.monotonic() < deadline:
         consumer.poll(0.2)
     assert assigned, "consumer never got partitions"
+    settle = time.monotonic() + 2.0        # "latest" resolves on the first fetch: earlier events are skipped
+    while time.monotonic() < settle:
+        consumer.poll(0.2)
 
     producer = Producer({"bootstrap.servers": BOOTSTRAP, "linger.ms": 0})
     for p in sent:                                           # per-user order = partition order
         producer.produce("payments", key=p["user_id"], value=json.dumps(p))
         producer.flush(10)
+        time.sleep(0.01)          # RANGE windows treat rows of one millisecond as peers (CLAUDE.md gotcha)
 
     got: dict[str, EnrichedPayment] = {}
     deadline = time.monotonic() + 60

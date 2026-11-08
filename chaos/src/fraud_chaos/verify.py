@@ -142,7 +142,7 @@ def read_topic(bootstrap: str, topic: str, since_s: float, until_s: float | None
                     continue
                 try:
                     out.append((ts, json.loads(m.value())))
-                except json.JSONDecodeError:
+                except ValueError:                  # JSON or UTF-8 error: a poison pill, not a reading
                     continue
         return out
     finally:

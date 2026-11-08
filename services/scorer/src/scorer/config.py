@@ -18,6 +18,8 @@ class Settings:
     dlq_topic: str
     redis_url: str
     redis_timeout_s: float
+    redis_deadline_s: float
+    redis_breaker_open_s: float
     max_messages: int
     max_wait_s: float
     tracking_uri: str
@@ -64,6 +66,8 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
         dlq_topic=kafka["dlq_topic"],
         redis_url=os.environ.get("REDIS_URL", scorer["redis"]["url"]),
         redis_timeout_s=scorer["redis"]["timeout_ms"] / 1000,
+        redis_deadline_s=scorer["redis"].get("deadline_ms", 25) / 1000,
+        redis_breaker_open_s=scorer["redis"].get("breaker_open_s", 1.0),
         max_messages=int(os.environ.get("BATCH_MAX_MESSAGES") or scorer["batch"]["max_messages"]),
         max_wait_s=float(os.environ.get("BATCH_MAX_WAIT_MS") or scorer["batch"]["max_wait_ms"]) / 1000,
         tracking_uri=os.environ.get("MLFLOW_TRACKING_URI", scorer["mlflow"]["tracking_uri"]),

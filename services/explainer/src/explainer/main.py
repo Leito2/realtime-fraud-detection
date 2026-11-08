@@ -15,6 +15,7 @@ from explainer.application.explain import ExplainDecision
 from explainer.config import Settings, load
 from explainer.domain.policy import BackpressurePolicy, CircuitBreaker
 from explainer.entrypoints.kafka_consumer import DecisionConsumer
+from fraudcore.watchdog import guard
 
 
 def build_llm(s: Settings):
@@ -32,8 +33,8 @@ def main() -> None:
         policy=BackpressurePolicy(s.max_inflight, s.max_age_s),
         breaker=CircuitBreaker(s.breaker_failures, s.breaker_cooldown_s, time.monotonic),
         metrics=metrics)
-    consumer = Consumer({"bootstrap.servers": s.bootstrap, "group.id": s.group, "enable.auto.commit": True,
-                         "auto.offset.reset": "latest"})
+    consumer = Consumer(guard({"bootstrap.servers": s.bootstrap, "group.id": s.group,
+                               "enable.auto.commit": True, "auto.offset.reset": "latest"}))
     consumer.subscribe([s.input_topic])
     sink = KafkaExplanationSink(Producer({"bootstrap.servers": s.bootstrap, "linger.ms": 20}), s.output_topic)
     loop = DecisionConsumer(consumer, explain, sink, s.max_inflight, on_inflight=metrics.inflight.set)

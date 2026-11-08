@@ -10,16 +10,17 @@ from confluent_kafka import Consumer
 from auditor.ingest import ingest
 from auditor.rows import TOPICS
 from auditor.store import PostgresStore
+from fraudcore.watchdog import guard
 
 log = logging.getLogger("auditor")
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    consumer = Consumer({
+    consumer = Consumer(guard({
         "bootstrap.servers": os.environ.get("BOOTSTRAP", "kafka:29092"), "group.id": "auditor",
         "enable.auto.commit": False, "auto.offset.reset": "earliest",
-    })
+    }))
     consumer.subscribe(list(TOPICS))
     store = PostgresStore(os.environ.get("POSTGRES_DSN", "postgresql://fraud:fraud@postgres:5432/fraud"))
     stop = threading.Event()

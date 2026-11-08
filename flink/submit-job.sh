@@ -5,7 +5,8 @@ set -e
 if curl -sf http://jobmanager:8081/jobs/overview | grep -q "\"state\":\"RUNNING\""; then
   echo "feature job already running - nothing to submit"; exit 0
 fi
-SQL="${1:-/opt/flink/sql/m1_passthrough.sql}"
+# m8_validated.sql = the M1 feature job + a raw-source branch that copies invalid payments to the dlq topic (F6)
+SQL="${1:-/opt/flink/sql/m8_validated.sql}"
 if [ -n "$BUFFER_TIMEOUT" ]; then
   TMP=$(mktemp --suffix=.sql)
   { echo "SET 'execution.buffer-timeout' = '${BUFFER_TIMEOUT}';"; cat "$SQL"; } > "$TMP"

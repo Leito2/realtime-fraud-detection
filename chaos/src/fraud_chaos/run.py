@@ -72,6 +72,37 @@ def drain(topic: str = "decisions", quiet_s: float = 20, timeout_s: float = 180)
         time.sleep(3)
 
 
+def total_consumer_lag(prometheus: str = "http://localhost:9090") -> float | None:
+    """Sum of every consumer group's lag as Prometheus sees it, or None if it cannot be read."""
+    import json
+    import urllib.parse
+    import urllib.request
+
+    url = f"{prometheus}/api/v1/query?" + urllib.parse.urlencode({"query": "sum(kafka_consumergroup_lag)"})
+    try:
+        with urllib.request.urlopen(url, timeout=5) as r:
+            result = json.load(r)["data"]["result"]
+        return float(result[0]["value"][1]) if result else 0.0
+    except (OSError, ValueError, KeyError, IndexError):
+        return None
+
+
+def wait_quiet(max_lag: float = 100, steady_s: float = 15, timeout_s: float = 240) -> bool:
+    """Do not start measuring while the previous experiment is still being digested: a baseline taken over a
+    backlog (seen in F3/F6b: p95 of 1-4 s before any fault) makes every later number meaningless."""
+    end, ok_since = time.monotonic() + timeout_s, None
+    while time.monotonic() < end:
+        lag = total_consumer_lag()
+        if lag is not None and lag <= max_lag:
+            ok_since = ok_since or time.monotonic()
+            if time.monotonic() - ok_since >= steady_s:
+                return True
+        else:
+            ok_since = None
+        time.sleep(3)
+    return False
+
+
 def is_valid_payment(row: dict) -> bool:
     """Only well-formed payments count as produced: junk is not a payment that anyone owes a decision."""
     try:
@@ -91,6 +122,8 @@ def to_decided(rows: list[tuple[float, dict]]) -> list[Decided]:
 def run_experiment(exp: Experiment, restore: bool = True) -> dict:
     print(f"== {exp.id}: {exp.title}\n   hypothesis: {exp.hypothesis}", flush=True)
     ensure_stack(exp)
+    if not wait_quiet():
+        print("   WARNING: consumers still had a backlog after 240 s; baseline may be polluted", flush=True)
     champion_before = registry.champion_version() if exp.fault["type"] == "mlflow_corrupt" else None
     dlq_before = end_offsets_total(BOOTSTRAP, "dlq")
     t_start = time.time()

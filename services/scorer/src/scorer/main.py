@@ -4,11 +4,14 @@ import asyncio
 import logging
 import signal
 import threading
+import time
 
 import redis
 from confluent_kafka import Consumer, Producer
 
+from fraudcore.watchdog import guard
 from scorer import config
+from scorer.adapters.deadline_profiles import DeadlineProfiles
 from scorer.adapters.hot_swap import HotSwapModel
 from scorer.adapters.kafka_decisions import KafkaDecisionSink
 from scorer.adapters.mlflow_registry import MlflowRegistry
@@ -18,6 +21,7 @@ from scorer.adapters.prometheus_metrics import serve as serve_metrics
 from scorer.adapters.redis_profiles import RedisProfileStore
 from scorer.adapters.rule_model import RuleModel
 from scorer.adapters.system_clock import SystemClock
+from scorer.application.guarded_profiles import BreakerProfiles
 from scorer.application.score_batch import ScoreBatch
 from scorer.entrypoints import grpc_server, kafka_consumer
 from scorer.sync_wiring import build_sync_scorer
@@ -35,11 +39,11 @@ def main() -> None:
 
     producer = Producer({"bootstrap.servers": cfg.bootstrap, "linger.ms": 1, "compression.type": "lz4",
                          "acks": 1})
-    consumer = Consumer({
+    consumer = Consumer(guard({
         "bootstrap.servers": cfg.bootstrap, "group.id": cfg.group, "enable.auto.commit": False,
         "auto.offset.reset": "earliest", "fetch.wait.max.ms": 5,
         "partition.assignment.strategy": "cooperative-sticky",  # peers keep their partitions (F2)
-    })
+    }))
     consumer.subscribe([cfg.input_topic])
 
     t = cfg.redis_timeout_s
@@ -51,7 +55,9 @@ def main() -> None:
     model.start()
     metrics = serve_metrics(cfg.metrics_port)
     score = ScoreBatch(
-        profiles=RedisProfileStore(redis_client), model=model,
+        profiles=BreakerProfiles(
+            DeadlineProfiles(RedisProfileStore(redis_client), cfg.redis_deadline_s),
+            cfg.redis_breaker_open_s, time.monotonic), model=model,
         sink=KafkaDecisionSink(producer, cfg.output_topic),
         thresholds=cfg.thresholds, policy=cfg.policy, clock=SystemClock(), metrics=metrics,
         log_features=cfg.log_features and args.mode == "champion",

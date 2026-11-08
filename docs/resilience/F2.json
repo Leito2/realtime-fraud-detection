@@ -1,0 +1,20 @@
+{
+  "id": "F2",
+  "confirmed": true,
+  "fault": {
+    "type": "scale_kill",
+    "service": "scorer",
+    "replicas": 2
+  },
+  "rate": 200,
+  "produced": 30000,
+  "lost": 0,
+  "duplicated_extra": 8,
+  "recovery_s": 0.0,
+  "longest_gap_s": 45.7,
+  "baseline_p95_ms": 3288.569686,
+  "degraded_share_after": 0.0007,
+  "dlq_growth": 0,
+  "lost_sample": [],
+  "run_at": "2026-11-07T04:50:13"
+}
