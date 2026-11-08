@@ -258,6 +258,90 @@ from timestamps the scorer already measures, so the other 99% of events pay noth
 Measured on this stack: MLflow takes ~370 MB (its default job-executor pool is disabled; it was 900 MB), Grafana ~110 MB,
 Prometheus ~65 MB, both exporters under 30 MB.
 
+### Serving, guarantees, windows and scaling (E4-E7, E10)
+
+All numbers below were measured on this 8 GB laptop with one generator; where a run is noisy it says so. The
+raw files are in [`docs/results/`](docs/results/).
+
+**E4 - the same model, three ways** (`make e4`; ADR-0016). Time of the model call alone, in ms. ONNX Runtime
+in-process is the fastest at every batch size the scorer uses; Triton adds a network hop (about 0.7-0.9 ms at
+small batches) and wins nothing with a single client, because its dynamic batching has nothing to merge. Parity
+ONNX vs Triton: max difference 1.2e-7. The comparison under many concurrent clients is not measured.
+
+| batch | native p50 | native p99 | ONNX p50 | ONNX p99 | Triton p50 | Triton p99 |
+|---|---|---|---|---|---|---|
+| 1 | 0.468 | 11.7282 | 0.0205 | 0.0714 | 0.9255 | 1.8596 |
+| 8 | 0.5774 | 20.2659 | 0.0333 | 0.0752 | 0.7279 | 1.9082 |
+| 32 | 0.5424 | 9.2748 | 0.0747 | 0.2405 | 0.7032 | 1.463 |
+| 128 | 0.8243 | 21.4424 | 0.2565 | 0.7743 | 0.9166 | 1.5966 |
+| 500 | 1.7622 | 17.2914 | 0.7928 | 1.6515 | 1.4195 | 3.959 |
+
+End to end (scorer on ONNX in-process vs as a Triton client, low rates, a noisy host, so compare p50 and not the tails):
+
+| variant | rate (ev/s) | rep | p50 | p95 | p99 | lost | lag stable |
+|---|---|---|---|---|---|---|---|
+| onnx | 200 | 1 | 16.703 | 330.751 | 1102.847 | 0 | True |
+| onnx | 200 | 2 | 16.415 | 35.423 | 84.415 | 0 | True |
+| onnx | 400 | 1 | 20.511 | 73.023 | 174.591 | 0 | True |
+| onnx | 400 | 2 | 23.263 | 217.343 | 1167.359 | 0 | True |
+| triton | 200 | 1 | 19.343 | 42.367 | 83.391 | 0 | True |
+| triton | 200 | 2 | 19.967 | 45.983 | 92.991 | 0 | True |
+| triton | 400 | 1 | 25.967 | 103.999 | 280.575 | 0 | True |
+| triton | 400 | 2 | 25.567 | 78.591 | 135.167 | 0 | True |
+
+**E5 - what exactly-once costs** (`make e5`; ADR-4). Same load, Flink sink at-least-once vs transactional. A row
+becomes visible when its checkpoint commits, so the checkpoint interval is the latency floor.
+
+| configuration | p50 (ms) | p95 (ms) | p99 (ms) | lost | valid run |
+|---|---|---|---|---|---|
+| at-least-once, checkpoint 10 s | 15.055 | 25.055 | 44.063 | 0 | True |
+| exactly-once, checkpoint 1 s | 642.047 | 1089.535 | 1146.879 | 0 | True |
+| exactly-once, checkpoint 5 s | 2844.671 | 5787.647 | 8937.471 | 0 | True |
+| exactly-once, checkpoint 10 s | 5562.367 | 10043.391 | 10649.599 | 0 | True |
+
+**E6 - what event-time windows cost** (`make e6`). The watermark delay is added to every decision. The rows counted
+as lost are the last events still held by the watermark when the load stops (0.5 s x 200 ev/s = 100 and 2 s x 200
+= 400, next to the 101 and 410 measured), not missing data.
+
+| window | p50 (ms) | p95 (ms) | p99 (ms) | lost | valid run |
+|---|---|---|---|---|---|
+| processing time | 15.927 | 29.935 | 75.967 | 0 | True |
+| event time, 0.5 s out-of-orderness | 831.999 | 1055.743 | 1221.631 | 101 | True |
+| event time, 2 s out-of-orderness | 2338.815 | 2562.047 | 2787.327 | 410 | True |
+
+**E7 - do longer velocity windows pay off?** (`make e7`; PLAN §3.3). Same XGBoost, same temporal split, with and
+without 1 h and 24 h counts and sums. `slow_fraud`, a few payments spread over hours, goes from nearly invisible
+to a fifth detected. Flink SQL cannot give both windows in one job; option B (a keyed operator,
+`flink/pyflink/user_state.py`) matches the 10-minute reference exactly and costs 36.06 us per event in CPython. The PyFlink
+thread-mode bridge between the JVM and Python is **not** measured, so option B is neither adopted nor ruled out.
+
+| | 10-minute features only | + 1 h and 24 h |
+|---|---|---|
+| PR-AUC | 0.5679 | 0.6176 |
+| recall at 1% FPR | 0.6425 | 0.7322 |
+| recall, account_takeover | 0.9863 | 0.9863 |
+| recall, atypical_amount | 0.64 | 0.64 |
+| recall, burst | 0.5827 | 0.7519 |
+| recall, card_testing | 0.9013 | 0.9333 |
+| recall, geo_jump | 0.3 | 0.44 |
+| recall, slow_fraud | 0.0111 | 0.2111 |
+
+**E10 - scaling** (`make e10`; 400 ev/s, because 2000 ev/s saturated this machine and four scorer processes do not
+fit in 8 GB). One scorer is enough at this rate and a second process does not lower the p95 here. The cell marked
+invalid is a run where the generator itself fell behind its schedule. Where each stage saturates needs a larger machine.
+
+| Flink parallelism | scorers | p50 (ms) | p95 (ms) | p99 (ms) | lag stable | lost | valid |
+|---|---|---|---|---|---|---|---|
+| 2 | 1 | 18.175 | 56.191 | 116.223 | True | 0 | True |
+| 2 | 2 | 21.951 | 185.471 | 679.423 | True | 1 | False |
+| 4 | 1 | 18.255 | 53.279 | 125.311 | True | 0 | True |
+| 4 | 2 | 20.399 | 70.911 | 139.007 | True | 0 | True |
+
+**Synchronous velocity vs the Flink window** (`make sync-vs-flink`; ADR-0012). The REST/gRPC path computes velocity
+from the Feature Writer's last snapshot. It matches the Flink window exactly for most payments and overcounts for the
+rest (events that just left the window are still in the snapshot); the undercount from the writer's delay stays
+below 0.2%. Full table: [`docs/results/m7c-sync-vs-flink.md`](docs/results/m7c-sync-vs-flink.md).
+
 ### Resilience: what happens when things break (F0-F10)
 
 Each experiment has a hypothesis written *before* the run, a fault injected at a fixed second under steady load
