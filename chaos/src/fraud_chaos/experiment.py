@@ -21,6 +21,7 @@ class Experiment:
     fault_at_s: int = 60            # load runs this long before the fault
     observe_s: int = 120            # and this long after it
     budget_ms: float = 80.0
+    p95_window_s: int | None = None  # judge p95 over this many seconds after the fault (None: until the end)
     needs: list[str] = field(default_factory=list)       # extra compose services the experiment requires
     env: dict = field(default_factory=dict)              # compose variables for the services it recreates
     recreate: list[str] = field(default_factory=list)    # services restarted with ``env`` before the load
@@ -43,6 +44,7 @@ class Outcome:
     degraded_share_after: float
     dlq_growth: int = 0
     p95_after_ms: float = float("nan")
+    p95_rest_ms: float = float("nan")      # the observation after the judged window, reported, not judged
     versions_changed: bool = False
     template_share: float | None = None
     extra: dict = field(default_factory=dict)
@@ -75,7 +77,7 @@ def judge(exp: Experiment, out: Outcome) -> tuple[bool, list[str]]:
               f"degraded share {out.degraded_share_after:.0%} (at least {e['degraded_min']:.0%})")
     if "p95_after_ms_max" in e:
         check(out.p95_after_ms <= e["p95_after_ms_max"],
-              f"p95 after the fault {out.p95_after_ms:.1f} ms (limit {e['p95_after_ms_max']} ms)")
+              f"p95 during the fault {out.p95_after_ms:.1f} ms (limit {e['p95_after_ms_max']} ms)")
     if e.get("versions_unchanged"):
         check(not out.versions_changed, "the serving model version did not change")
     if "template_share_min" in e:

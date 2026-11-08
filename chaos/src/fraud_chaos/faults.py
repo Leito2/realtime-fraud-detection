@@ -116,8 +116,13 @@ def mlflow_down_and_corrupt_model(down_s: float = 60, **_) -> str:
     return f"MLflow down for {down_s / 2:.0f} s; then corrupt version {version} set as champion"
 
 
-INJECTORS = {"kill": kill, "stop": stop_then_start, "scale_kill": scale_kill, "toxic": toxic,
-             "proxy_down": proxy_down, "poison": poison, "overload": overload,
+def no_fault(**_) -> str:
+    """Control run: the same load, warm-up and judging, with nothing injected."""
+    return "no fault injected (control run)"
+
+
+INJECTORS = {"none": no_fault, "kill": kill, "stop": stop_then_start, "scale_kill": scale_kill,
+             "toxic": toxic, "proxy_down": proxy_down, "poison": poison, "overload": overload,
              "mlflow_corrupt": mlflow_down_and_corrupt_model}
 
 

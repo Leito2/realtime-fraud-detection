@@ -1,0 +1,18 @@
+id: F0
+title: Control run, nothing is broken
+hypothesis: >-
+  With no fault at all, the same load, warm-up and judging as F8 give no silence over 5 s and a p95 under 80 ms in
+  the window after the "fault" instant. If this fails, the F8 failure is the host (periodic stalls), not the LLM.
+mechanism: Nothing is injected; the run measures how much of what the fault experiments report is background noise.
+rate: 200
+fault_at_s: 60
+observe_s: 120
+p95_window_s: 30
+needs: [llm-stub, explainer]
+recreate: [explainer, scorer]
+env: { LLM_PROVIDER: ollama, LLM_BASE_URL: "http://llm-stub:8000/v1", LOG_FEATURES: flagged }
+fault: { type: none }
+expect:
+  lost_max: 0
+  gap_s_max: 5
+  p95_after_ms_max: 80

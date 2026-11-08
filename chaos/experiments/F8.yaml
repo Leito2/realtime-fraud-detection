@@ -7,6 +7,7 @@ mechanism: Circuit breaker around the LLM call plus the template built from the 
 rate: 200
 fault_at_s: 60
 observe_s: 120
+p95_window_s: 30
 needs: [llm-stub, explainer]
 recreate: [explainer, scorer]
 env: { LLM_PROVIDER: ollama, LLM_BASE_URL: "http://llm-stub:8000/v1", LOG_FEATURES: flagged }

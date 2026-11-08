@@ -47,7 +47,7 @@ def build_sync_scorer(cfg: config.Settings, metrics_port: int | None) -> SyncSco
     batch = ScoreBatch(
         profiles=BreakerProfiles(
             DeadlineProfiles(RedisProfileStore(redis_client), cfg.redis_deadline_s),
-            cfg.redis_breaker_open_s, time.monotonic), model=model,
+            cfg.redis_breaker_open_s, time.monotonic, cfg.redis_breaker_failures), model=model,
         sink=FireAndForgetDecisionSink(producer, cfg.output_topic), thresholds=cfg.thresholds,
         policy=cfg.policy, clock=SystemClock(), log_features=cfg.log_features, **kwargs)
     return SyncScorer(ScoreSync(velocity=RedisVelocityStore(redis_client), batch=batch), model, producer)

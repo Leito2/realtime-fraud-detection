@@ -57,7 +57,7 @@ def main() -> None:
     score = ScoreBatch(
         profiles=BreakerProfiles(
             DeadlineProfiles(RedisProfileStore(redis_client), cfg.redis_deadline_s),
-            cfg.redis_breaker_open_s, time.monotonic), model=model,
+            cfg.redis_breaker_open_s, time.monotonic, cfg.redis_breaker_failures), model=model,
         sink=KafkaDecisionSink(producer, cfg.output_topic),
         thresholds=cfg.thresholds, policy=cfg.policy, clock=SystemClock(), metrics=metrics,
         log_features=cfg.log_features and args.mode == "champion",

@@ -26,6 +26,17 @@ BOOTSTRAP = "localhost:9092"
 OUT_DIR = ROOT / "docs" / "resilience"
 
 
+# A freshly (re)started service needs a couple of minutes before its latency settles (seen in the plain-load
+# check: p95 of 0.3-2.6 s for 150 s, then 26-45 ms). That stretch is load, not part of the measured baseline.
+WARMUP_S = 120
+# Services recreated for the experiment (new environment, cold model and SHAP) take longer: in F8 the scorer
+# and explainer were still at a p95 of 6 s three minutes after the restart and settled at 33 ms soon after.
+RECREATE_WARMUP_S = 120
+
+
+def warmup_s(exp: Experiment) -> int:
+    return WARMUP_S + (RECREATE_WARMUP_S if exp.recreate else 0)
+
 PROFILES = ["--profile", "core", "--profile", "ops", "--profile", "chaos"]
 
 
@@ -52,7 +63,7 @@ def reset_stack(exp: Experiment) -> None:
 
 
 def start_load(exp: Experiment, seed: int) -> subprocess.Popen:
-    duration = exp.fault_at_s + exp.observe_s
+    duration = warmup_s(exp) + exp.fault_at_s + exp.observe_s
     return subprocess.Popen(
         [*TOOLS, "generator", "--rate", str(exp.rate), "--duration", str(duration),
          "--stream-seed", str(seed),
@@ -72,13 +83,19 @@ def drain(topic: str = "decisions", quiet_s: float = 20, timeout_s: float = 180)
         time.sleep(3)
 
 
+# Only the groups a baseline depends on. The async consumers (auditor, shadow scorer) may be stopped on
+# purpose to free memory on a small machine, and a stopped group keeps a lag that nobody will drain.
+QUIET_GROUPS = "scorer-champion|flink-features|feature-writer|explainer"
+QUIET_QUERY = f'sum(kafka_consumergroup_lag{{consumergroup=~"{QUIET_GROUPS}"}})'
+
+
 def total_consumer_lag(prometheus: str = "http://localhost:9090") -> float | None:
     """Sum of every consumer group's lag as Prometheus sees it, or None if it cannot be read."""
     import json
     import urllib.parse
     import urllib.request
 
-    url = f"{prometheus}/api/v1/query?" + urllib.parse.urlencode({"query": "sum(kafka_consumergroup_lag)"})
+    url = f"{prometheus}/api/v1/query?" + urllib.parse.urlencode({"query": QUIET_QUERY})
     try:
         with urllib.request.urlopen(url, timeout=5) as r:
             result = json.load(r)["data"]["result"]
@@ -128,7 +145,7 @@ def run_experiment(exp: Experiment, restore: bool = True) -> dict:
     dlq_before = end_offsets_total(BOOTSTRAP, "dlq")
     t_start = time.time()
     load = start_load(exp, seed=random.randint(1, 10**6))
-    time.sleep(exp.fault_at_s)
+    time.sleep(warmup_s(exp) + exp.fault_at_s)
     fault_s = time.time()
     done: dict = {}
 
@@ -156,11 +173,18 @@ def run_experiment(exp: Experiment, restore: bool = True) -> dict:
     decided = to_decided(read_topic(BOOTSTRAP, "decisions", t_start - 2))
     produced_ids = set(produced)                      # built once: a set per element made this quadratic
     in_run = [d for d in decided if d.payment_id in produced_ids]
-    before = [d.latency_ms for d in in_run if d.decided_s < fault_s]
+    before = [d.latency_ms for d in in_run if fault_s - exp.fault_at_s <= d.decided_s < fault_s]
     base_p95 = sorted(before)[int(0.95 * len(before))] if before else float("nan")
     tl = timeline(in_run, fault_s, lo=-exp.fault_at_s + 15, hi=exp.observe_s + 60)
     after = [d for d in in_run if fault_s <= d.decided_s <= t_end]
-    p95_after = sorted(d.latency_ms for d in after)[int(0.95 * len(after))] if after else float("nan")
+    window_end = fault_s + exp.p95_window_s if exp.p95_window_s else t_end
+
+    def p95_of(rows: list) -> float:
+        lat = sorted(d.latency_ms for d in rows)
+        return lat[int(0.95 * len(lat))] if lat else float("nan")
+
+    p95_after = p95_of([d for d in after if d.decided_s <= window_end])
+    p95_rest = p95_of([d for d in after if d.decided_s > window_end])
     versions_before = {d.model_version for d in in_run if d.decided_s < fault_s}
     versions_after = {d.model_version for d in after}
     template_share = None
@@ -174,7 +198,8 @@ def run_experiment(exp: Experiment, restore: bool = True) -> dict:
         recovery_s=recovery_s(tl, exp.budget_ms), longest_gap_s=longest_gap_s(in_run, fault_s, t_end),
         baseline_p95_ms=base_p95,
         degraded_share_after=(sum(d.degraded for d in after) / len(after)) if after else 0.0,
-        dlq_growth=end_offsets_total(BOOTSTRAP, "dlq") - dlq_before, p95_after_ms=p95_after,
+        dlq_growth=end_offsets_total(BOOTSTRAP, "dlq") - dlq_before,
+        p95_after_ms=p95_after, p95_rest_ms=p95_rest,
         versions_changed=bool(versions_before) and not versions_after <= versions_before,
         template_share=template_share,
         extra={"fault": done["what"], "generator": load_out.strip().splitlines()[-1] if load_out else ""})

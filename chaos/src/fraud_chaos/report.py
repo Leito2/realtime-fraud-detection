@@ -93,7 +93,9 @@ def write_report(exp: Experiment, out: Outcome, confirmed: bool, checks: list[st
         f"| recovery (rate back and p95 back to normal for 5 s; normal = max({exp.budget_ms:.0f} ms, "
         f"1.5 x the pre-fault median p95)) | {recovery} |",
         f"| longest silence of the decisions topic | {out.longest_gap_s:.1f} s |",
-        f"| p95 before the fault | {out.baseline_p95_ms:.1f} ms |",
+        f"| p95 before the fault (last {exp.fault_at_s} s) | {out.baseline_p95_ms:.1f} ms |",
+        f"| p95 after the fault, judged window | {out.p95_after_ms:.1f} ms |",
+        f"| p95 in the rest of the observation | {out.p95_rest_ms:.1f} ms |",
         f"| degraded decisions after the fault | {out.degraded_share_after:.0%} |",
         f"| records added to the DLQ | {out.dlq_growth} |", "",
         "## Checks", "", *[f"- {c}" for c in checks], "",
