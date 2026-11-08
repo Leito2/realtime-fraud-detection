@@ -18,6 +18,8 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1   # single broker: without these the transaction coordinator never starts (F10, E5)
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
     ports: ["9092:9092"]
@@ -71,7 +73,12 @@ services:
       taskmanager: { condition: service_started }
       kafka-init: { condition: service_completed_successfully }
     command: ["/opt/flink/submit-job.sh"]
-    environment: { BUFFER_TIMEOUT: "${BUFFER_TIMEOUT:-}" }
+    environment:
+      BUFFER_TIMEOUT: "${BUFFER_TIMEOUT:-}"
+      CHECKPOINT_INTERVAL: "${CHECKPOINT_INTERVAL:-}"
+      DELIVERY_GUARANTEE: "${DELIVERY_GUARANTEE:-}"
+      PARALLELISM: "${PARALLELISM:-}"
+      WATERMARK_DELAY: "${WATERMARK_DELAY:-}"
     restart: "no"
     mem_limit: 500m
 

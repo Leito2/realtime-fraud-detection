@@ -1,0 +1,24 @@
+{
+  "id": "F4",
+  "confirmed": false,
+  "fault": {
+    "type": "toxic",
+    "proxy": "redis",
+    "kind": "latency",
+    "attributes": {
+      "latency": 20
+    },
+    "duration_s": 60
+  },
+  "rate": 200,
+  "produced": 36000,
+  "lost": 0,
+  "duplicated_extra": 0,
+  "recovery_s": 3.0,
+  "longest_gap_s": 3.42,
+  "baseline_p95_ms": 2109.083307,
+  "degraded_share_after": 0.6985,
+  "dlq_growth": 0,
+  "lost_sample": [],
+  "run_at": "2026-11-07T06:29:36"
+}

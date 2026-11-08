@@ -1,0 +1,20 @@
+{
+  "id": "F6",
+  "confirmed": false,
+  "fault": {
+    "type": "poison",
+    "topic": "payments",
+    "count": 500
+  },
+  "rate": 200,
+  "produced": 30000,
+  "lost": 0,
+  "duplicated_extra": 0,
+  "recovery_s": null,
+  "longest_gap_s": 7.34,
+  "baseline_p95_ms": 243.843971,
+  "degraded_share_after": 0.4985,
+  "dlq_growth": 655,
+  "lost_sample": [],
+  "run_at": "2026-11-07T06:37:51"
+}

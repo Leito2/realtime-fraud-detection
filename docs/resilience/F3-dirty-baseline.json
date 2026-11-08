@@ -1,0 +1,20 @@
+{
+  "id": "F3",
+  "confirmed": true,
+  "fault": {
+    "type": "stop",
+    "service": "redis",
+    "down_s": 30
+  },
+  "rate": 200,
+  "produced": 36000,
+  "lost": 0,
+  "duplicated_extra": 0,
+  "recovery_s": 2.0,
+  "longest_gap_s": 3.13,
+  "baseline_p95_ms": 33817.311059,
+  "degraded_share_after": 0.6364,
+  "dlq_growth": 0,
+  "lost_sample": [],
+  "run_at": "2026-11-07T06:24:50"
+}

@@ -7,14 +7,14 @@
     "duration_s": 60
   },
   "rate": 200,
-  "produced": 72000,
+  "produced": 96000,
   "lost": 0,
-  "duplicated_extra": 98059,
-  "recovery_s": 101.0,
-  "longest_gap_s": 40.57,
-  "baseline_p95_ms": 1939.281798,
-  "degraded_share_after": 0.2431,
-  "dlq_growth": 604,
+  "duplicated_extra": 0,
+  "recovery_s": 5.0,
+  "longest_gap_s": 0.47,
+  "baseline_p95_ms": 26.076192,
+  "degraded_share_after": 0.0031,
+  "dlq_growth": 0,
   "lost_sample": [],
-  "run_at": "2026-11-07T06:58:43"
+  "run_at": "2026-11-08T03:45:20"
 }

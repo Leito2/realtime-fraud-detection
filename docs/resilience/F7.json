@@ -1,0 +1,19 @@
+{
+  "id": "F7",
+  "confirmed": true,
+  "fault": {
+    "type": "mlflow_corrupt",
+    "down_s": 60
+  },
+  "rate": 200,
+  "produced": 36000,
+  "lost": 0,
+  "duplicated_extra": 0,
+  "recovery_s": 5.0,
+  "longest_gap_s": 3.25,
+  "baseline_p95_ms": 58.377942,
+  "degraded_share_after": 0.211,
+  "dlq_growth": 0,
+  "lost_sample": [],
+  "run_at": "2026-11-07T21:05:11"
+}

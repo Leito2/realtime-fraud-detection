@@ -1,0 +1,18 @@
+{
+  "id": "F0",
+  "confirmed": true,
+  "fault": {
+    "type": "none"
+  },
+  "rate": 200,
+  "produced": 84000,
+  "lost": 0,
+  "duplicated_extra": 0,
+  "recovery_s": 4.0,
+  "longest_gap_s": 1.04,
+  "baseline_p95_ms": 25.428943,
+  "degraded_share_after": 0.003,
+  "dlq_growth": 0,
+  "lost_sample": [],
+  "run_at": "2026-11-08T04:01:55"
+}

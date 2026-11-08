@@ -1,0 +1,20 @@
+{
+  "id": "F8",
+  "confirmed": true,
+  "fault": {
+    "type": "kill",
+    "service": "llm-stub",
+    "restart_after_s": null
+  },
+  "rate": 200,
+  "produced": 84000,
+  "lost": 0,
+  "duplicated_extra": 0,
+  "recovery_s": 4.0,
+  "longest_gap_s": 0.57,
+  "baseline_p95_ms": 26.452877,
+  "degraded_share_after": 0.0014,
+  "dlq_growth": 0,
+  "lost_sample": [],
+  "run_at": "2026-11-08T04:10:27"
+}

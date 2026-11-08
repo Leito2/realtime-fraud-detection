@@ -2,7 +2,7 @@
 
 **Hypothesis (written before the run):** Malformed records that reach payments-enriched (past Flink) are routed to the DLQ by the scorer, which keeps scoring: no valid payment is lost and the decision stream has no gap.
 
-**Result: hypothesis REFUTED.**
+**Result: hypothesis CONFIRMED.**
 
 **Mechanism under test:** The scorer validates every enriched event against the contract and publishes the raw bytes of the invalid ones to the dlq topic.
 
@@ -14,20 +14,22 @@ Steady load of 200 ev/s (about half of the sustained rate) for 60 s, then the fa
 
 | measure | value |
 |---|---|
-| payments produced | 30000 |
+| payments produced | 54000 |
 | lost (produced, never decided) | 0 |
 | duplicated decisions (extra copies) | 0 |
-| recovery (rate back and p95 back to normal for 5 s; normal = max(80 ms, 1.5 x the pre-fault median p95)) | 26 s |
-| longest silence of the decisions topic | 16.3 s |
-| p95 before the fault | 970.2 ms |
-| degraded decisions after the fault | 38% |
-| records added to the DLQ | 1000 |
+| recovery (rate back and p95 back to normal for 5 s; normal = max(80 ms, 1.5 x the pre-fault median p95)) | 1 s |
+| longest silence of the decisions topic | 0.5 s |
+| p95 before the fault (last 60 s) | 26.0 ms |
+| p95 after the fault, judged window | 27.6 ms |
+| p95 in the rest of the observation | nan ms |
+| degraded decisions after the fault | 0% |
+| records added to the DLQ | 500 |
 
 ## Checks
 
 - PASS lost 0 (limit 0)
-- FAIL longest silence 16.3 s (limit 5 s)
-- PASS DLQ grew by 1000 (at least 500)
+- PASS longest silence 0.5 s (limit 5 s)
+- PASS DLQ grew by 500 (at least 500)
 
 ![decisions per second and p95 around the fault](F6b.svg)
 
