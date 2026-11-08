@@ -28,6 +28,12 @@ class Settings:
     model_alias: str
     poll_s: float
     onnx_threads: int
+    serving_mode: str
+    triton_url: str
+    triton_repository: Path
+    triton_model: str
+    triton_timeout_s: float
+    triton_ready_s: float
     model_cache_dir: Path | None
     metrics_port: int
     log_features: bool | str
@@ -58,6 +64,8 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
     kafka = scorer["kafka"]
     shadow = mode == "shadow"
     grpc = scorer["grpc"]
+    serving = scorer.get("serving", {})
+    triton = serving.get("triton", {})
     deg = th["degraded"]
     return Settings(
         bootstrap=os.environ.get("BOOTSTRAP", kafka["bootstrap"]),
@@ -77,6 +85,13 @@ def load(config_dir: Path | None = None, mode: str = "champion") -> Settings:
         model_alias=scorer["model"]["challenger_alias" if shadow else "champion_alias"],
         poll_s=float(scorer["model"]["poll_seconds"]),
         onnx_threads=int(scorer["onnx"]["intra_op_num_threads"]),
+        serving_mode=os.environ.get("SERVING_MODE") or serving.get("mode", "onnx"),
+        triton_url=os.environ.get("TRITON_URL") or triton.get("url", "triton:8001"),
+        triton_repository=Path(os.environ.get("TRITON_REPOSITORY")
+                               or triton.get("repository", "/triton-models")),
+        triton_model=triton.get("model", "fraud_xgb"),
+        triton_timeout_s=triton.get("timeout_ms", 50) / 1000,
+        triton_ready_s=float(triton.get("ready_timeout_s", 60)),
         log_features=_log_features(scorer.get("log_features", False)),
         grpc_port=int(os.environ.get("GRPC_PORT", grpc["port"])),
         grpc_stream_max=int(grpc["stream_max_messages"]),

@@ -1,5 +1,7 @@
 batch: { max_messages: 500, max_wait_ms: 5 }   # experiment E2 sweeps these
 onnx: { intra_op_num_threads: 1 }
+# onnx = in-process ONNX Runtime (default); triton = same micro-batch over gRPC to Triton (experiment E4)
+serving: { mode: onnx, triton: { url: "triton:8001", repository: /triton-models, model: fraud_xgb, timeout_ms: 50, ready_timeout_s: 60 } }
 redis: { url: "redis://redis:6379/0", timeout_ms: 8, deadline_ms: 30, breaker_open_s: 1.0, breaker_failures: 3 }
 model: { name: fraud-champion, champion_alias: champion, challenger_alias: challenger, poll_seconds: 5 }
 mlflow: { tracking_uri: "http://mlflow:5000" }

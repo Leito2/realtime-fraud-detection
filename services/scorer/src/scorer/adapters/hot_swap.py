@@ -6,6 +6,7 @@ champion exists (or if the registry is down) the current model keeps serving: pr
 """
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -32,15 +33,24 @@ class ModelRegistry(Protocol):
     def fetch(self, version: str) -> RegisteredModel: ...
 
 
+# Turns a registry model into something that can score: in-process ONNX by default, Triton when configured.
+RuntimeBuilder = Callable[[RegisteredModel, str, str, Thresholds | None], ModelRuntime]
+
+
 class HotSwapModel:
     def __init__(self, registry: ModelRegistry, name: str, fallback: ModelRuntime, poll_s: float = 30.0,
-                 intra_op_threads: int = 1) -> None:
+                 intra_op_threads: int = 1, build: RuntimeBuilder | None = None) -> None:
         self._registry, self._name, self._poll_s, self._threads = registry, name, poll_s, intra_op_threads
+        self._build = build or self._build_onnx
         self._active: ModelRuntime = fallback
         self._version: str | None = None
         self._rejected: set[str] = set()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+
+    def _build_onnx(self, loaded: RegisteredModel, name: str, version: str,
+                    thresholds: Thresholds | None) -> ModelRuntime:
+        return OnnxModel(loaded.onnx_bytes, name, version, self._threads, thresholds, loaded.reference)
 
     def predict(self, X: np.ndarray) -> Prediction:
         return self._active.predict(X)
@@ -64,8 +74,7 @@ class HotSwapModel:
             if loaded.thresholds:
                 cut = loaded.thresholds
                 thresholds = Thresholds(f"{self._name}-v{version}", cut["review"], cut["block"])
-            model = OnnxModel(loaded.onnx_bytes, self._name, version, self._threads, thresholds,
-                              loaded.reference)
+            model = self._build(loaded, self._name, version, thresholds)
         except Exception:
             log.exception("model v%s could not be loaded; refusing it", version)
             self._rejected.add(version)

@@ -22,6 +22,7 @@ from scorer.adapters.system_clock import SystemClock
 from scorer.application.guarded_profiles import BreakerProfiles
 from scorer.application.score_batch import ScoreBatch
 from scorer.application.score_sync import ScoreSync
+from scorer.serving import runtime_builder
 
 
 @dataclass
@@ -41,7 +42,7 @@ def build_sync_scorer(cfg: config.Settings, metrics_port: int | None) -> SyncSco
     redis_client = redis.Redis.from_url(cfg.redis_url, socket_timeout=t, socket_connect_timeout=t)
     registry = MlflowRegistry(cfg.tracking_uri, cfg.model_name, cfg.model_alias, cfg.model_cache_dir)
     model = HotSwapModel(registry, cfg.model_name, fallback=RuleModel(), poll_s=cfg.poll_s,
-                         intra_op_threads=cfg.onnx_threads)
+                         intra_op_threads=cfg.onnx_threads, build=runtime_builder(cfg))
     model.start()
     kwargs = {"metrics": serve_metrics(metrics_port)} if metrics_port else {}
     batch = ScoreBatch(

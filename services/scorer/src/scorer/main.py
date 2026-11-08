@@ -24,6 +24,7 @@ from scorer.adapters.system_clock import SystemClock
 from scorer.application.guarded_profiles import BreakerProfiles
 from scorer.application.score_batch import ScoreBatch
 from scorer.entrypoints import grpc_server, kafka_consumer
+from scorer.serving import runtime_builder
 from scorer.sync_wiring import build_sync_scorer
 
 
@@ -51,7 +52,7 @@ def main() -> None:
     # The rule model serves until the registry has a champion; then the poller swaps it in, no restart.
     registry = MlflowRegistry(cfg.tracking_uri, cfg.model_name, cfg.model_alias, cfg.model_cache_dir)
     model = HotSwapModel(registry, cfg.model_name, fallback=RuleModel(), poll_s=cfg.poll_s,
-                         intra_op_threads=cfg.onnx_threads)
+                         intra_op_threads=cfg.onnx_threads, build=runtime_builder(cfg))
     model.start()
     metrics = serve_metrics(cfg.metrics_port)
     score = ScoreBatch(

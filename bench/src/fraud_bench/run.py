@@ -85,6 +85,39 @@ def e2(args: argparse.Namespace) -> None:
               f"{s['p99']} | {s['lag_stable']} |")
 
 
+def e4(args: argparse.Namespace) -> None:
+    """End to end at low rates with the scorer on each serving path (PLAN.md 2.7); one generator, 8 GB."""
+    run_id, out = _new_run("e4", vars(args))
+    steps = []
+    for variant in args.variants:
+        env = {"SERVING_MODE": variant}
+        profiles = ["--profile", "core"] + (["--profile", "serving-triton"] if variant == "triton" else [])
+        ensure_stack(env)
+        if variant == "triton":
+            sh([*COMPOSE, *profiles, "up", "-d", "triton"], env=env)
+            time.sleep(20)                                   # Triton starts empty; the scorer publishes
+        sh([*COMPOSE, *profiles, "up", "-d", "--force-recreate", "scorer"], env=env)
+        wait(flink_job_running, "Flink job RUNNING", 60)
+        time.sleep(30 if variant == "triton" else 8)         # the scorer publishes and waits for Triton
+        for rate in args.rates:
+            for rep in range(1, args.reps + 1):
+                print(f"\n=== E4 {variant} at {rate} ev/s, repetition {rep}/{args.reps} ===")
+                res = run_load(rate, args.duration, 1, label=f"{variant}-{rate}-r{rep}",
+                               warmup_s=args.warmup, warmup_rate=rate, hooks=[LagSampler(rate)],
+                               out_dir=out / "raw")
+                steps.append(to_step(rate, rep, res, {"variant": variant}))
+                (out / "steps.json").write_text(json.dumps(steps, indent=2), encoding="utf-8")
+                _drain()
+    sh([*COMPOSE, "--profile", "core", "up", "-d", "--force-recreate", "scorer"],
+       env={"SERVING_MODE": "onnx"})
+    print("\n| variant | rate | rep | p50 | p95 | p99 | lost | lag stable |")
+    print("|---|---|---|---|---|---|---|---|")
+    for s in steps:
+        print(f"| {s['variant']} | {s['rate']} | {s['rep']} | {s['p50']} | {s['p95']} | {s['p99']} | "
+              f"{s['lost']} | {s['lag_stable']} |")
+    print(f"\nresults: {out}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Open-loop load protocol")
     sub = ap.add_subparsers(dest="experiment", required=True)
@@ -102,6 +135,13 @@ def main() -> None:
     p2.add_argument("--warmup", type=int, default=20)
     p2.add_argument("--procs", type=int, default=1)
     p2.set_defaults(fn=e2)
+    p4 = sub.add_parser("e4", help="end to end with the scorer on ONNX in-process vs Triton")
+    p4.add_argument("--variants", nargs="+", default=["onnx", "triton"], choices=["onnx", "triton"])
+    p4.add_argument("--rates", type=int, nargs="+", default=[200, 500, 1000])
+    p4.add_argument("--reps", type=int, default=3)
+    p4.add_argument("--duration", type=int, default=120)
+    p4.add_argument("--warmup", type=int, default=45)
+    p4.set_defaults(fn=e4)
     args = ap.parse_args()
     args.fn(args)
 

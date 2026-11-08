@@ -82,7 +82,9 @@ services:
     # AOF every second: a restart (F3) must not wipe the user profiles, which the scorer would silently replace
     # with neutral defaults. At most one second of velocity state is lost, and the Feature Writer rebuilds it.
     command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction", "--save", "",
-              "--appendonly", "yes", "--appendfsync", "everysec"]
+              "--appendonly", "yes", "--appendfsync", "everysec",
+              # a power cut can leave a damaged tail on the AOF; start anyway instead of refusing (seen after a crash)
+              "--aof-load-corrupt-tail-max-size", "4096"]
     volumes: ["redis-data:/data"]
     ports: ["6379:6379"]
     mem_limit: 200m
@@ -207,11 +209,27 @@ services:
       BATCH_MAX_WAIT_MS: "${BATCH_MAX_WAIT_MS:-}"
       LOG_FEATURES: "${LOG_FEATURES:-}"      # 1: decisions carry the served features (feedback dataset)
       MODEL_CACHE_DIR: /cache            # last downloaded models: the scorer survives MLflow being down (F7)
-    volumes: ["./config:/app/config:ro", "model-cache:/cache"]
+      SERVING_MODE: "${SERVING_MODE:-}"      # empty = config/scorer.yaml (onnx); "triton" = experiment E4
+      TRITON_URL: "${TRITON_URL:-triton:8001}"
+    volumes: ["./config:/app/config:ro", "model-cache:/cache", "triton-models:/triton-models"]
     depends_on:
       kafka-init: { condition: service_completed_successfully }
     restart: unless-stopped
     mem_limit: 300m
+
+  # Variant B of serving (PLAN.md 2.7, experiment E4): Triton CPU with the ONNX Runtime backend. The scorer writes the
+  # champion into the shared `triton-models` volume and Triton polls it, so the registry stays the source of truth.
+  #   SERVING_MODE=triton docker compose --profile core --profile serving-triton up -d scorer triton
+  # The image is several GB; Triton needs ~1-1.5 GB of RAM, so stop the optional services while measuring.
+  triton:
+    profiles: ["serving-triton"]
+    image: nvcr.io/nvidia/tritonserver:25.01-py3
+    command: ["tritonserver", "--model-repository=/models", "--model-control-mode=poll",
+              "--repository-poll-secs=2", "--log-verbose=0", "--allow-metrics=true"]
+    volumes: ["triton-models:/models"]
+    ports: ["8010:8000", "8001:8001", "8002:8002"]
+    restart: unless-stopped
+    mem_limit: 1500m
 
   feature-writer:
     <<: *core
@@ -319,6 +337,14 @@ services:
     volumes: ["./docs/results:/results"]
     mem_limit: 512m
 
+  # E4 micro-benchmark: native vs ONNX in-process vs Triton (needs --profile serving-triton running)
+  e4:
+    profiles: ["tools"]
+    image: fraud/app:local
+    entrypoint: ["python", "-m", "fraud_bench.e4"]
+    volumes: ["./docs/results:/results", "./data:/data:ro", "triton-models:/triton-models"]
+    mem_limit: 768m
+
   generator:
     profiles: ["tools"]
     image: fraud/app:local
@@ -361,6 +387,7 @@ volumes:
   mlflow-data: {}
   tempo-data: {}
   model-cache: {}
+  triton-models: {}
   model-cache-shadow: {}
   model-cache-grpc: {}
   redis-data: {}
