@@ -67,3 +67,5 @@ e10:       ## E10: scorer processes x Flink parallelism at a fixed rate -> docs/
 	uv run python scripts/e10_scaling.py $(E10_ARGS)
 sync-vs-flink:  ## ADR-0012: error of synchronous velocity vs the Flink window -> docs/results/m7c-sync-vs-flink.md
 	uv run python -m fraud_bench.sync_vs_flink $(SVF_ARGS)
+e7:         ## E7: value of 1 h / 24 h velocity windows (offline) -> docs/results/e7-long-windows.md
+	uv run python -m fraud_training.e7_long_windows $(E7_ARGS)

@@ -1,0 +1,30 @@
+{
+  "train_rows": 400000,
+  "test_rows": 100000,
+  "ten_minute_only": {
+    "features": 13,
+    "pr_auc": 0.5679,
+    "recall_at_1pct_fpr": 0.6425,
+    "recall_by_scenario": {
+      "account_takeover": 0.9863,
+      "atypical_amount": 0.64,
+      "burst": 0.5827,
+      "card_testing": 0.9013,
+      "geo_jump": 0.3,
+      "slow_fraud": 0.0111
+    }
+  },
+  "with_1h_and_24h": {
+    "features": 16,
+    "pr_auc": 0.6176,
+    "recall_at_1pct_fpr": 0.7322,
+    "recall_by_scenario": {
+      "account_takeover": 0.9863,
+      "atypical_amount": 0.64,
+      "burst": 0.7519,
+      "card_testing": 0.9333,
+      "geo_jump": 0.44,
+      "slow_fraud": 0.2111
+    }
+  }
+}
