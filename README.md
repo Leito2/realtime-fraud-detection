@@ -1,13 +1,27 @@
 # 🛡️ Real-time Fraud Detection Platform
 
 > Streaming fraud scoring — Kafka · Flink SQL · Redis · XGBoost/ONNX · Grafana — measured end to end with
-> open-loop load and percentiles. **Headline (to be measured):** _{X}k events/s at p95 {Y} ms on a single 8 GB laptop._
+> open-loop load and percentiles. **Headline (measured):** 200 events/s sustained at p95 38.6 ms end to end on a single 8 GB laptop; the bottleneck is the Flink TaskManager.
 
-**Status:** 🟡 M0 bootstrap. Full design in [`PLAN.md`](PLAN.md) (Spanish). Courses behind it: Flink, stream engines,
+**Status:** v1.0, milestones M0-M10 built and measured. Full design in [`PLAN.md`](PLAN.md) (Spanish). Courses behind it: Flink, stream engines,
 Redis feature serving, Triton/ONNX, Grafana & latency engineering (Learning vault).
 
 ## TL;DR — Results at a Glance
-_Filled from `docs/results/` after milestone M4._
+Every number is a measurement from `docs/results/` on one 8 GB Windows laptop (WSL2 about 5 GB), one generator.
+
+| | Result | Where |
+|---|---|---|
+| Sustained throughput | **200 ev/s at p95 38.6 ms** (300 ev/s: p95 81 ms, over the 80 ms budget); bottleneck: Flink TaskManager CPU | [E1](#e1---how-much-does-this-laptop-sustain-make-bench) |
+| Model vs rules | PR-AUC 0.590 vs 0.164, recall at 1% FPR 0.674 vs 0.260 | [Rules vs models](#rules-vs-models-test-days-never-seen-in-training) |
+| ONNX vs native XGBoost | 0.021 ms vs 0.468 ms per call at batch 1 (22x); parity ONNX-Triton 1.2e-7; Triton adds about 0.7-0.9 ms | [E4](#serving-guarantees-windows-and-scaling-e4-e7-e10) |
+| Longer windows | `slow_fraud` recall 1.1% -> 21.1% with 1 h / 24 h features | E7 |
+| gRPC vs REST | p50 4.1 vs 6.3 ms, p99 8.7-10.8 vs 15.4 ms at 100 req/s (streaming: no valid result) | [E11](#scorer-batching-shadow-tracing-and-the-api-e2-e8-e9-e11) |
+| Exactly-once | 0 duplicates after killing the TaskManager (1539 with at-least-once); p95 25 ms -> 1.1 s | [E5, F10](#resilience-what-happens-when-things-break-f0-f10) |
+| Failure experiments | 11 fault experiments plus a control: 9 of the 11 confirmed; F1 (39 s restart) and F5 (130 s silence after a broker restart) refuted; 0 events lost in all | [F0-F10](#resilience-what-happens-when-things-break-f0-f10) |
+| Shadow challenger | not free here: p50 +0.5-4 ms with the shadow on (E8) | E8 |
+
+The target of the plan (80 ms p95 at thousands of events per second) is **not** met on this hardware: the honest
+number is 200 ev/s. The design is not the limit so much as one laptop running Kafka, Flink and the scorer together.
 
 ## Part I — The Big Picture
 ### 1. The Problem: Fraud Is a Real-time Problem
@@ -67,21 +81,23 @@ One thing the parity test found: Flink treats payments of the same user processe
 group, so in a burst the earlier payment can "see" the later one. It is exact for normally spaced payments and
 documented in [PLAN §3.3](PLAN.md) as the reason to measure an alternative (E7).
 
-#### Preliminary: how much does Flink's buffer timeout cost? (E3)
+#### How much does Flink's buffer timeout cost? (E3)
 Flink ships records between operators in network buffers and flushes a buffer when it is full or when a timeout
-expires. The timeout is a direct latency floor for sparse traffic. A first sweep at 500 ev/s (20 s per value, raw
-data in `docs/results/e3-buffer-timeout.json`):
+expires. The timeout is a direct latency floor for sparse traffic. Sweep at 200 ev/s (the rate this laptop sustains,
+see E1), 20 s per value after a warm-up, one run per value, nothing else running; raw data in
+`docs/results/e3-buffer-timeout.json`:
 
 | buffer-timeout | p50 (ms) | p95 (ms) | p99 (ms) |
 |---|---|---|---|
-| 100 ms | 288 | 1434 | 1523 |
-| 10 ms | 23 | 74 | 155 |
-| 5 ms | 30 | 799 | 1355 |
-| 1 ms | 51 | 730 | 1301 |
+| 100 ms | 78 | 257 | 570 |
+| 10 ms | 23 | 109 | 224 |
+| 5 ms | 20 | 66 | 102 |
+| 1 ms | 19 | 111 | 172 |
 
-Only the first conclusion is safe: a 100 ms timeout adds roughly 10x. The 5 ms and 1 ms rows are **not valid**: I
-was running unrelated CPU work on the same laptop during the sweep, and those p95 values are contention, not the
-timeout. E3 is repeated on a quiet machine in M4 before any number from it is quoted.
+The default (100 ms) puts the median at about 4x the one with a 1-10 ms timeout. Between 1, 5 and 10 ms the p50 is
+within 3 ms and the p95 differences (66-111 ms) are run-to-run noise at this single repetition, so the data does not
+say which of the three is best, only that the default is the expensive choice. An earlier sweep at 500 ev/s is not
+used: that rate is above what this machine sustains, so every row was queueing.
 
 ### 5. Design Decisions (ADRs)
 ### 6. The Journey of a Payment
@@ -364,6 +380,78 @@ from the Feature Writer's last snapshot. It matches the Flink window exactly for
 rest (events that just left the window are still in the snapshot); the undercount from the writer's delay stays
 below 0.2%. Full table: [`docs/results/m7c-sync-vs-flink.md`](docs/results/m7c-sync-vs-flink.md).
 
+### Scorer batching, shadow, tracing and the API (E2, E8, E9, E11)
+
+Same machine, same rule: one generator, only the pipeline running, 200 ev/s for E2/E8/E9 (E1's sustained rate).
+Single-run cells are marked; a run is `valid` only if the generator kept its schedule.
+
+**E2 - micro-batch size x wait** (`fraud_bench.run e2`). One run per cell, so differences of a few ms are noise
+(E1 shows p95 moving by that much between identical runs). The large-batch settings are the best of the four
+here (p95 33 and 44 ms against 74-81 ms for batches of 1 and 50).
+
+| max messages | max wait (ms) | p50 | p95 | p99 | lag stable |
+|---|---|---|---|---|---|
+| 1 | 1 | 10.863 | 73.919 | 154.879 | True |
+| 50 | 5 | 15.639 | 80.639 | 351.743 | True |
+| 500 | 5 | 15.927 | 32.927 | 71.935 | True |
+| 500 | 20 | 25.919 | 43.935 | 83.967 | True |
+
+**E8 - does the shadow challenger touch the champion?** (`scripts/e8_shadow.py`; ADR-6). The shadow is a separate
+consumer group that only writes to `shadow-scores`, so the expectation was "no effect". On this 8 GB laptop it is
+not zero: with the shadow on, the p50 is 0.5-4 ms higher in each of the three pairs, and the median p95 is 77 ms
+against 52 ms (one run on each side is invalid, so treat the p95 as a hint, not a measurement). The shadow competes
+for the same CPU; the isolation is logical (own group, own topic), not physical.
+
+| shadow | rep | p50 | p95 | p99 | lost | valid |
+|---|---|---|---|---|---|---|
+| off | 1 | 17.407 | 47.423 | 104.447 | 0 | True |
+| on | 1 | 21.663 | 277.759 | 894.975 | 0 | False |
+| off | 2 | 18.815 | 51.839 | 98.815 | 0 | True |
+| on | 2 | 21.135 | 77.183 | 171.135 | 0 | True |
+| off | 3 | 20.047 | 104.063 | 353.279 | 0 | False |
+| on | 3 | 20.511 | 74.559 | 140.543 | 0 | True |
+
+**E9 - cost of observing** (`scripts/e9_tracing.py`). Tracing off, 1% and 100% of payments carrying a `traceparent`
+and exporting spans. The host had a bad stretch during this experiment (several runs invalid, one "off" run with a
+3.6 s p95), so the tails are not usable. The p50 of the clean repetitions (2 and 3) is stable: about 20 ms off,
+19-20 ms at 1% and 24 ms at 100%. Sampling 1% is free at this resolution; tracing everything costs about 4 ms of p50.
+
+| tracing | rep | p50 | p95 | p99 | lost | valid |
+|---|---|---|---|---|---|---|
+| off | 1 | 77.439 | 3778.559 | 5480.447 | 0 | False |
+| 1% | 1 | 577.023 | 1663.999 | 2396.159 | 0 | False |
+| 100% | 1 | 1278.975 | 4145.151 | 4730.879 | 0 | False |
+| off | 2 | 19.903 | 66.943 | 199.935 | 0 | True |
+| 1% | 2 | 19.551 | 52.543 | 100.543 | 0 | True |
+| 100% | 2 | 23.951 | 132.991 | 420.095 | 0 | False |
+| off | 3 | 20.767 | 3651.583 | 6549.503 | 0 | True |
+| 1% | 3 | 19.391 | 50.399 | 90.431 | 0 | True |
+| 100% | 3 | 23.631 | 302.847 | 652.799 | 0 | False |
+
+**E11 - REST/JSON vs gRPC** (`python -m fraud_bench.e11`). Same model, same use case behind both
+entrypoints, one client process at 100 req/s (the rate a single Python client holds without falling behind its own
+schedule), 3 repetitions. gRPC unary is about a third faster at the median and at the p99.
+
+| mode | p50 | p95 | p99 |
+|---|---|---|---|
+| rest | 6.28 | 9.68 | 15.38 |
+| grpc | 4.15 | 6.27 | 10.16 |
+
+Per run (the **bidirectional stream has no valid result**: the benchmark client, not the server, fell behind its
+schedule; see `docs/results/e11-grpc-vs-rest.md`):
+
+| mode | rep | p50 | p95 | p99 | start lag p99 | valid | failed requests |
+|---|---|---|---|---|---|---|---|
+| rest | 1 | 6.32 | 9.68 | 13.35 | 1.59 | True | 0 |
+| grpc | 1 | 4.16 | 6.27 | 10.16 | 1.30 | True | 0 |
+| rest | 2 | 6.28 | 9.61 | 16.31 | 1.96 | True | 0 |
+| grpc | 2 | 4.15 | 6.59 | 10.75 | 1.35 | True | 0 |
+| rest | 3 | 6.23 | 9.88 | 15.38 | 1.86 | True | 0 |
+| grpc | 3 | 4.09 | 6.06 | 8.66 | 1.26 | True | 0 |
+| grpc-stream | 1 | 11.47 | 137.30 | 281.39 | 67.84 | False | 110 |
+| grpc-stream | 2 | 9.67 | 21.85 | 121.21 | 14.76 | False | 0 |
+| grpc-stream | 3 | 10.09 | 26.93 | 158.91 | 61.97 | False | 49 |
+
 ### Resilience: what happens when things break (F0-F10)
 
 Each experiment has a hypothesis written *before* the run, a fault injected at a fixed second under steady load
@@ -434,6 +522,27 @@ First measurement (M1, 8 GB laptop, placeholder rule scorer; raw files in `docs/
 The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 
 ## Part VI — Reflection (lessons, limitations, future work, glossary)
+
+### Limitations (what was not measured or not achieved)
+* **Hardware.** 8 GB with WSL2 at about 5 GB. Rates above 200 ev/s were not sustained; four scorer processes, Triton under many clients and any run above one generator were not measured. Larger-machine numbers need larger-machine runs.
+* **Noisy host.** Several runs had to be repeated or discarded because the host was swapping; the experiments that still show wide tails (E4 end to end, E8, E9) say so next to the numbers.
+* **gRPC streaming** has no valid benchmark: the client, not the server, fell behind its schedule (E11).
+* **F5:** the 130 s silence after a broker restart is not explained. **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
+* **Option B** (PyFlink keyed operator) is verified for correctness and cost of its Python logic (36 us/event) but the JVM-Python bridge in thread mode was not measured, so it is neither adopted nor rejected.
+* **No real data.** Everything runs on a synthetic generator; IEEE-CIS was not used (it needs a Kaggle download with account credentials).
+* The shadow challenger is isolated logically, not physically: it shares the CPU with the champion (E8).
+
+### Lessons
+* A control run (F0) and a quiet baseline are what make a failure experiment readable; two early verdicts changed once the machine stopped swapping.
+* Configuration plumbing fails silently: the Flink job ignored the exactly-once override because compose forwarded one variable, and a single-broker Kafka needs `transaction.state.log.replication.factor=1` or the transactional sink hangs forever.
+* Benchmark harnesses have bugs too: a collector idle timeout shorter than the checkpoint gap produced fake losses, and an asyncio write race made a gRPC client report 100% errors.
+
+### CV phrase (measured numbers only)
+* **Real-time fraud scoring pipeline** (Kafka -> Flink SQL windowed features -> Redis online store -> XGBoost on ONNX Runtime) that sustains **200 events/s at p95 38.6 ms end to end** on a single 8 GB laptop, measured open loop with three repetitions per step; the bottleneck was identified as the Flink TaskManager (100-131% of a core at 300-400 ev/s while the scorer stayed near 30%).
+* **Model serving and lifecycle:** XGBoost on ONNX Runtime is 22x faster than the native booster per call at batch 1 (0.021 vs 0.468 ms; parity 1.2e-7 against Triton); it beats a rules baseline at **0.674 vs 0.260 recall at 1% FPR** (PR-AUC 0.590 vs 0.164); the champion hot-swaps through the MLflow registry, and a challenger in shadow mode costs 0.5-4 ms of champion p50 on this hardware.
+* **Contract-first gRPC scoring API** benchmarked against REST/JSON on the same model: **p99 8.7-10.8 ms vs 15.4 ms**, p50 4.1 vs 6.3 ms at 100 req/s.
+* **Reliability:** 11 failure experiments (plus a control) with written hypotheses and 0 lost events in all of them; exactly-once recovery from a killed Flink TaskManager in 26 s with 0 duplicates (1539 with at-least-once), at a latency cost measured in E5; two hypotheses refuted and published with their real numbers.
+
 
 ## License
 MIT

@@ -1,0 +1,25 @@
+{
+  "generator": {
+    "sent": 18000,
+    "delivery_errors": 0,
+    "target_rate": 200.0,
+    "gen_lag_p99_ms": 1.44,
+    "valid": true
+  },
+  "latency": {
+    "count": 18000,
+    "e2e_ms": {
+      "p50": 17.407,
+      "p95": 47.423,
+      "p99": 104.447,
+      "max": 255.487
+    },
+    "scorer_ms": {
+      "p50": 17.487,
+      "p95": 42.751,
+      "p99": 97.855,
+      "max": 250.879
+    },
+    "skipped_before_start": 0
+  }
+}

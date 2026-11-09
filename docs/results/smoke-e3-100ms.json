@@ -1,25 +1,25 @@
 {
   "generator": {
-    "sent": 10000,
+    "sent": 4000,
     "delivery_errors": 0,
-    "target_rate": 500.0,
-    "gen_lag_p99_ms": 0.2,
+    "target_rate": 200.0,
+    "gen_lag_p99_ms": 3.418,
     "valid": true
   },
   "latency": {
-    "count": 10000,
+    "count": 4000,
     "e2e_ms": {
-      "p50": 60030.975,
-      "p95": 60030.975,
-      "p99": 60030.975,
-      "max": 60030.975
+      "p50": 77.823,
+      "p95": 256.895,
+      "p99": 569.855,
+      "max": 677.887
     },
     "scorer_ms": {
-      "p50": 60030.975,
-      "p95": 60030.975,
-      "p99": 60030.975,
-      "max": 60030.975
+      "p50": 75.455,
+      "p95": 233.983,
+      "p99": 548.863,
+      "max": 631.295
     },
-    "skipped_before_start": 3715
+    "skipped_before_start": 0
   }
 }
