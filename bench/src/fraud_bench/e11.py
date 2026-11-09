@@ -206,7 +206,11 @@ async def run_grpc_stream(target: str, pool: list[dict], rate: float, duration_s
             pending[i] = future
             async with write_lock:                      # request order == response order on one stream
                 order.put_nowait(i)
-                await call.write(requests[i % len(requests)])
+                try:
+                    await call.write(requests[i % len(requests)])
+                except BaseException:
+                    order.get_nowait()                  # nothing was sent: keep order aligned with responses
+                    raise
             await asyncio.wait_for(future, deadline_s)
 
         samples = await open_loop(rate, duration_s, send)

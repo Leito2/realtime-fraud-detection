@@ -1,6 +1,6 @@
 """E7 (PLAN.md 3.3): what does option B cost per event? Times the operator logic without a cluster.
 
-    uv run python -m fraud_bench.option_b [--users 5000] [--events 200000] [--rate 400]
+    uv run python -m fraud_bench.option_b [--users 2000] [--events 200000] [--gap 600] [--warm 100000]
 
 Replays a stream where each user pays every ``--gap`` seconds on average, so the 24 h buffer fills the way it
 would in production, and reports the time of one ``UserWindows.add`` call. This is the Python cost only:

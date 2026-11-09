@@ -3,7 +3,8 @@
 #   scripts/final_measurements.sh              -> everything, one step after another
 #   scripts/final_measurements.sh e3 e8        -> only those steps
 # Progress goes to chaos_series_final.log (git-ignored); a failed step does not stop the rest. Nothing here
-# uses `down` or `-v`. Run nothing else on the machine meanwhile.
+# uses `down` or `-v`. Run nothing else on the machine meanwhile. It leaves dashboards, exporters and the
+# async scorers stopped: bring them back with `docker compose --profile core --profile ops --profile grpc up -d`.
 cd "$(dirname "$0")/.." || exit 1
 LOG=chaos_series_final.log
 steps=("$@")
@@ -28,17 +29,9 @@ for s in "${steps[@]}"; do
     e2)  PYTHONUNBUFFERED=1 uv run python -m fraud_bench.run e2 --rate 200 >> $LOG 2>&1 ;;
     e9)  PYTHONUNBUFFERED=1 uv run python scripts/e9_tracing.py --rate 200 >> $LOG 2>&1 ;;
     e8)  PYTHONUNBUFFERED=1 uv run python scripts/e8_shadow.py --rate 200 >> $LOG 2>&1 ;;
-    e11)
-      docker compose --profile core --profile grpc up -d scoring-grpc api >> $LOG 2>&1
-      sleep 60
-      rm -f docs/results/e11.jsonl
-      for mode in rest grpc grpc-stream; do
-        case $mode in rest) target=http://api:8000 ;; *) target=scoring-grpc:50051 ;; esac
-        for rep in 1 2 3; do
-          docker compose --profile tools run --rm -T e11 $mode --target $target --rate 300 --duration 60 \
-            --out /results/e11.jsonl >> $LOG 2>&1
-        done
-      done ;;
+    e11) docker compose --profile core --profile grpc up -d scoring-grpc api >> $LOG 2>&1
+         sleep 60
+         bash scripts/run_e11.sh >> $LOG 2>&1 ;;      # 100 req/s, 200 s cap per run
   esac
   echo "=== $s exit $?" >> $LOG
 done

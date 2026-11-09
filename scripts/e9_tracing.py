@@ -1,6 +1,6 @@
 """E9 (PLAN.md 5.6): what does it cost to observe? Tracing off / 1% / 100% of payments.
 
-    uv run python scripts/e9_tracing.py [--rate 300] [--duration 90] [--warmup 30] [--reps 3]
+    uv run python scripts/e9_tracing.py [--rate 200] [--duration 90] [--warmup 30] [--reps 3]
 
 Off = no OTLP endpoint on the scorer and no traceparent on payments. 1% and 100% = the scorer exports spans
 (OTel Collector + Tempo, profile ``trace``) for that share of payments, set with the generator's
@@ -29,7 +29,7 @@ def recreate_scorer(endpoint: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rate", type=int, default=300)
+    ap.add_argument("--rate", type=int, default=200)
     ap.add_argument("--duration", type=int, default=90)
     ap.add_argument("--warmup", type=int, default=30)
     ap.add_argument("--reps", type=int, default=3)

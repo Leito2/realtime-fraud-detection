@@ -1,6 +1,6 @@
 """E8 (PLAN.md 5.6, ADR-6): does the shadow challenger change the champion's latency?
 
-    uv run python scripts/e8_shadow.py [--rate 300] [--duration 90] [--warmup 30] [--reps 3]
+    uv run python scripts/e8_shadow.py [--rate 200] [--duration 90] [--warmup 30] [--reps 3]
 
 Same load, the shadow scorer (its own consumer group, publishes only to shadow-scores) stopped and running,
 alternating off/on so slow drift of the machine hits both. Reports the median p95 of each side and the
@@ -28,7 +28,7 @@ def set_shadow(on: bool) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rate", type=int, default=300)
+    ap.add_argument("--rate", type=int, default=200)
     ap.add_argument("--duration", type=int, default=90)
     ap.add_argument("--warmup", type=int, default=30)
     ap.add_argument("--reps", type=int, default=3)

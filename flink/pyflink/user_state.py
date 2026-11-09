@@ -10,6 +10,7 @@ boundary, like the SQL job and ``fraudcore.features.velocity_reference``.
 from __future__ import annotations
 
 from collections import deque
+from itertools import islice
 
 SMALL_TX_AMOUNT = 10.0                                  # pinned to flink/sql/*.sql by tests/test_features
 WINDOWS_S = {"10m": 600, "1h": 3600, "24h": 86400}
@@ -57,5 +58,5 @@ class UserWindows:
             row[f"f_sum_{name}"] = float(self._sum[name])
             row[f"f_small_tx_cnt_{name}"] = self._small[name]
             lo = self._start[name] - self._dropped
-            row[f"f_max_{name}"] = float(max(a for _, a in list(self._events)[lo:]))
+            row[f"f_max_{name}"] = float(max(a for _, a in islice(self._events, lo, None)))
         return row
