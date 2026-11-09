@@ -258,6 +258,28 @@ from timestamps the scorer already measures, so the other 99% of events pay noth
 Measured on this stack: MLflow takes ~370 MB (its default job-executor pool is disabled; it was 900 MB), Grafana ~110 MB,
 Prometheus ~65 MB, both exporters under 30 MB.
 
+### E1 - how much does this laptop sustain? (`make bench`)
+
+Open-loop rate steps, three repetitions each, a 60 s discarded warm-up and 180 s of load per run, one generator,
+on the 8 GB laptop with only the pipeline running (no dashboards, no async scorers). Raw steps, manifest and the
+knee chart are in `docs/results/e1-*`.
+
+| rate (ev/s) | reps | p50 (ms) | p95 (ms) | p95 range | p99 (ms) | sustained | failing |
+|---|---|---|---|---|---|---|---|
+| 100 | 3 | 14.4 | 22.9 | 21.4-23.4 | 52.9 | yes | - |
+| 200 | 3 | 16.5 | 38.6 | 37.8-41.1 | 83.6 | yes (highest) | - |
+| 300 | 3 | 20.1 | 81 | 62.8-96.3 | 343 | no | p95_within_budget |
+| 400 | 3 | 36.1 | 3,750 | 105-20,267 | 7,967 | no | p95_within_budget |
+| 500 | 3 | 75.6 | 17,007 | 276-47,677 | 24,429 | no | gen_lag_valid, p95_within_budget |
+| 600 | 3 | 577 | 52,560 | 22,282-60,031 | 59,245 | no | p95_within_budget |
+
+**Sustained throughput: 200 ev/s at p95 38.6 ms** (all three repetitions between 37.8 and 41.1 ms). At 300 ev/s the
+median p95 is 81 ms, just over the 80 ms budget, and from 400 ev/s the queues grow without bound. The container CPU
+at 300-400 ev/s shows where: the Flink TaskManager sits at 100-131% of a core while the scorer stays near 30% and Redis
+under 3%, so **the bottleneck is the Flink job (one TaskManager on this laptop), not the scorer or the feature store**.
+The M1 smoke (500 ev/s, p95 96 ms, placeholder scorer) is an earlier measurement; 500 ev/s does not fit the budget in this run (p95 17 s, generator lag invalid).
+The `[X]k events/s` of the headline is therefore not reachable on this hardware, and this section is the real number.
+
 ### Serving, guarantees, windows and scaling (E4-E7, E10)
 
 All numbers below were measured on this 8 GB laptop with one generator; where a run is noisy it says so. The

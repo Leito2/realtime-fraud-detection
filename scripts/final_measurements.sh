@@ -7,7 +7,7 @@
 cd "$(dirname "$0")/.." || exit 1
 LOG=chaos_series_final.log
 steps=("$@")
-[ ${#steps[@]} -eq 0 ] && steps=(e3 e1 e2 e9 e8 e11)
+[ ${#steps[@]} -eq 0 ] && steps=(e3 e1 e2 e9 e8 e11)   # rates are the ones this 8 GB laptop sustains (E1: 200 ev/s)
 
 quiet() {
   # only what the pipeline needs: no dashboards, exporters, explainer, Triton, async scorers
@@ -15,6 +15,7 @@ quiet() {
     grafana prometheus kafka-exporter redis-exporter explainer triton llm-stub auditor scorer-shadow \
     api scoring-grpc > /dev/null 2>&1
   SERVING_MODE=onnx docker compose --profile core up -d --force-recreate scorer > /dev/null 2>&1
+  uv run python -c "from fraud_bench.stack import cancel_flink_jobs, submit_flink; cancel_flink_jobs(); submit_flink()" >> $LOG 2>&1   # drop any backlog
   sleep 20
 }
 
@@ -23,8 +24,8 @@ for s in "${steps[@]}"; do
   quiet
   case $s in
     e3)  PYTHONUNBUFFERED=1 uv run python scripts/e3_buffer_timeout.py >> $LOG 2>&1 ;;
-    e1)  PYTHONUNBUFFERED=1 make bench BENCH_ARGS="--rates 500 1000 1500 2000 3000" >> $LOG 2>&1 ;;
-    e2)  PYTHONUNBUFFERED=1 uv run python -m fraud_bench.run e2 >> $LOG 2>&1 ;;
+    e1)  PYTHONUNBUFFERED=1 make bench BENCH_ARGS="--rates 100 200 300 400 500 600" >> $LOG 2>&1 ;;
+    e2)  PYTHONUNBUFFERED=1 uv run python -m fraud_bench.run e2 --rate 200 >> $LOG 2>&1 ;;
     e9)  PYTHONUNBUFFERED=1 uv run python scripts/e9_tracing.py >> $LOG 2>&1 ;;
     e8)  PYTHONUNBUFFERED=1 uv run python scripts/e8_shadow.py >> $LOG 2>&1 ;;
     e11)

@@ -38,7 +38,7 @@ def submit(buffer_timeout: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rate", type=int, default=500)
+    ap.add_argument("--rate", type=int, default=200)
     ap.add_argument("--duration", type=int, default=20)
     ap.add_argument("--values", nargs="+", default=["100 ms", "10 ms", "5 ms", "1 ms"])
     args = ap.parse_args()

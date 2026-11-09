@@ -1,0 +1,101 @@
+{
+  "run_id": "20261109-053220-e1",
+  "experiment": "e1",
+  "started_at": "2026-11-09T10:32:22+00:00",
+  "params": {
+    "experiment": "e1",
+    "rates": [
+      100,
+      200,
+      300,
+      400,
+      500,
+      600
+    ],
+    "reps": 3,
+    "duration": 180,
+    "warmup": 60,
+    "procs": 1
+  },
+  "git": {
+    "sha": "8771fe1d011db5c5ad7f85f13a0c735b34cf285f",
+    "dirty": true
+  },
+  "host": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+    "cpu_count": 8,
+    "python": "3.12.15",
+    "wslconfig": "[wsl2]\nmemory=5GB\nprocessors=6\nswap=4GB\n"
+  },
+  "docker": {
+    "server_version": "29.9.2",
+    "ncpu": 6,
+    "mem_total_bytes": 5159133184
+  },
+  "model_version": "8",
+  "effective_config": {
+    "scorer.yaml": {
+      "batch": {
+        "max_messages": 500,
+        "max_wait_ms": 5
+      },
+      "onnx": {
+        "intra_op_num_threads": 1
+      },
+      "serving": {
+        "mode": "onnx",
+        "triton": {
+          "url": "triton:8001",
+          "repository": "/triton-models",
+          "model": "fraud_xgb",
+          "timeout_ms": 50,
+          "ready_timeout_s": 60
+        }
+      },
+      "redis": {
+        "url": "redis://redis:6379/0",
+        "timeout_ms": 8,
+        "deadline_ms": 30,
+        "breaker_open_s": 1.0,
+        "breaker_failures": 3
+      },
+      "model": {
+        "name": "fraud-champion",
+        "champion_alias": "champion",
+        "challenger_alias": "challenger",
+        "poll_seconds": 5
+      },
+      "mlflow": {
+        "tracking_uri": "http://mlflow:5000"
+      },
+      "kafka": {
+        "bootstrap": "kafka:29092",
+        "input_topic": "payments-enriched",
+        "output_topic": "decisions",
+        "shadow_topic": "shadow-scores",
+        "dlq_topic": "dlq",
+        "isolation_level": "read_uncommitted"
+      },
+      "grpc": {
+        "port": 50051,
+        "stream_max_messages": 32,
+        "stream_max_wait_ms": 5,
+        "workers": 4,
+        "metrics_port": 9103
+      },
+      "log_features": false
+    },
+    "thresholds.yaml": {
+      "threshold_set": "fraud-champion-v3",
+      "review": 0.70314,
+      "block": 0.980025,
+      "degraded": {
+        "review": 0.2,
+        "block": 0.7,
+        "max_auto_approve_amount": 500
+      }
+    }
+  },
+  "compose_images": "[{\"ID\":\"sha256:8a76783332ddfe50efd87652cbbdde682a9b26663f440e51eb6e112457b33d1a\",\"ContainerName\":\"realtime-fraud-detection-jobmanager-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:8a76783332ddfe50efd87652cbbdde682a9b26663f440e51eb6e112457b33d1a\",\"ContainerName\":\"realtime-fraud-detection-flink-job-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:fa6c84bc5c75509b7fe2b028754b3b4c60314c98c93dfad9bb452041da0af82a\",\"ContainerName\":\"realtime-fraud-detection-auditor-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:fa6c84bc5c75509b7fe2b028754b3b4c60314c98c93dfad9bb452041da0af82a\",\"ContainerName\":\"realtime-fraud-detection-api-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:4443be217c396b065ee34845534199c36fdba4dc619cb96550e228d73fba6e69\",\"ContainerName\":\"realtime-fraud-detection-tempo-1\",\"Repository\":\"grafana/tempo\",\"Tag\":\"2.7.1\",\"Platform\":\"linux/amd64\",\"Size\":178833687,\"Created\":\"2025-02-14T14:53:33.374309133Z\",\"LastTagTime\":\"2026-11-06T18:54:23.447184132Z\"},{\"ID\":\"sha256:b44c283298cea49e2defaba1b3028783798346f2a926684e3a345fd8441af3b8\",\"ContainerName\":\"realtime-fraud-detection-toxiproxy-1\",\"Repository\":\"ghcr.io/shopify/toxiproxy\",\"Tag\":\"2.9.0\",\"Platform\":\"linux/amd64\",\"Size\":24051326,\"Created\":\"2024-03-12T18:35:25.222217981Z\",\"LastTagTime\":\"2026-11-06T21:44:53.063402228Z\"},{\"ID\":\"sha256:120f7ec77293459ccfdad66bb1db75ab72e8bfeab99f58b1cc2564cadcd7a9e7\",\"ContainerName\":\"realtime-fraud-detection-redis-exporter-1\",\"Repository\":\"oliver006/redis_exporter\",\"Tag\":\"v1.67.0\",\"Platform\":\"linux/amd64\",\"Size\":13517932,\"Created\":\"2024-12-15T20:30:19.412537938Z\",\"LastTagTime\":\"2026-11-06T18:37:52.902489933Z\"},{\"ID\":\"sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb\",\"ContainerName\":\"realtime-fraud-detection-grafana-1\",\"Repository\":\"grafana/grafana\",\"Tag\":\"11.6.0\",\"Platform\":\"linux/amd64\",\"Size\":873201878,\"Created\":\"2025-03-21T14:06:22.583444934Z\",\"LastTagTime\":\"2026-11-06T18:44:41.836978032Z\"},{\"ID\":\"sha256:4150e46b2e9697ac30e4be8de03ec1704b4bdc7037577b83b8d35a32be298c16\",\"ContainerName\":\"realtime-fraud-detection-kafka-exporter-1\",\"Repository\":\"danielqsj/kafka-exporter\",\"Tag\":\"v1.9.0\",\"Platform\":\"linux/amd64\",\"Size\":44852207,\"Created\":\"2025-02-17T03:12:01.5836382Z\",\"LastTagTime\":\"2026-11-06T18:37:55.630832412Z\"},{\"ID\":\"sha256:fbc7d7c428e3755cf36518d4976596002477e4c052d1f80b5b9eafd06d0fff2f\",\"ContainerName\":\"realtime-fraud-detection-kafka-1\",\"Repository\":\"apache/kafka\",\"Tag\":\"3.9.0\",\"Platform\":\"linux/amd64\",\"Size\":627464423,\"Created\":\"2024-10-26T22:22:16.402925795Z\",\"LastTagTime\":\"2026-11-06T16:44:37.276009854Z\"},{\"ID\":\"sha256:b157df4a4752b0ded9bbd1cdc760ce8cb10fb820b2c7e6e72a0c54043cce4fe9\",\"ContainerName\":\"realtime-fraud-detection-scorer-1\",\"Repository\":\"fraud/app\",\"Tag\":\"local\",\"Platform\":\"linux/amd64\",\"Size\":3170814548,\"Created\":\"2026-11-08T12:28:21.547243818Z\",\"LastTagTime\":\"2026-11-09T10:29:53.987377664Z\"},{\"ID\":\"sha256:fbc7d7c428e3755cf36518d4976596002477e4c052d1f80b5b9eafd06d0fff2f\",\"ContainerName\":\"realtime-fraud-detection-kafka-init-1\",\"Repository\":\"apache/kafka\",\"Tag\":\"3.9.0\",\"Platform\":\"linux/amd64\",\"Size\":627464423,\"Created\":\"2024-10-26T22:22:16.402925795Z\",\"LastTagTime\":\"2026-11-06T16:44:37.276009854Z\"},{\"ID\":\"sha256:c2658820e763294a9e9de7b36c81e59b879e3459148351aee4e31a126ca64860\",\"ContainerName\":\"realtime-fraud-detection-s3-1\",\"Repository\":\"chrislusf/seaweedfs\",\"Tag\":\"latest\",\"Platform\":\"linux/amd64\",\"Size\":734391242,\"Created\":\"2026-10-25T04:15:37.074634942Z\",\"LastTagTime\":\"2026-11-06T20:17:34.636225459Z\"},{\"ID\":\"sha256:de1068af6f552240dfab67bcc9bfef99bfc60f776bb4580ef077ea4c8c97e848\",\"ContainerName\":\"realtime-fraud-detection-redis-1\",\"Repository\":\"redis\",\"Tag\":\"8\",\"Platform\":\"linux/amd64\",\"Size\":210829639,\"Created\":\"2026-10-28T01:38:06.567518542Z\",\"LastTagTime\":\"2026-11-05T00:34:36.94312177Z\"},{\"ID\":\"sha256:eea017611e2231da3a06d1cf47b73efdfe4811a313001cb12f4efe13b1418134\",\"ContainerName\":\"realtime-fraud-detection-triton-1\",\"Repository\":\"nvcr.io/nvidia/tritonserver\",\"Tag\":\"25.01-py3\",\"Platform\":\"linux/amd64\",\"Size\":34578613799,\"Created\":\"2025-01-24T05:49:47.362396936Z\",\"LastTagTime\":\"2026-11-08T08:12:36.761846931Z\"},{\"ID\":\"sha256:0791fc870d879f0d710e14616250461a3c1121f6ddfe2bb8603061365e1c5b3e\",\"ContainerName\":\"realtime-fraud-detection-llm-stub-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:fa6c84bc5c75509b7fe2b028754b3b4c60314c98c93dfad9bb452041da0af82a\",\"ContainerName\":\"realtime-fraud-detection-scoring-grpc-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:8a76783332ddfe50efd87652cbbdde682a9b26663f440e51eb6e112457b33d1a\",\"ContainerName\":\"realtime-fraud-detection-taskmanager-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:d0ebf65280da2e1b1491d1b93648281afd353d4b9ea19160090303cec9a233bd\",\"ContainerName\":\"realtime-fraud-detection-otel-collector-1\",\"Repository\":\"otel/opentelemetry-collector-contrib\",\"Tag\":\"0.116.1\",\"Platform\":\"linux/amd64\",\"Size\":350624171,\"Created\":\"2024-12-17T21:15:23.809442131Z\",\"LastTagTime\":\"2026-11-06T18:54:27.66793324Z\"},{\"ID\":\"sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62\",\"ContainerName\":\"realtime-fraud-detection-prometheus-1\",\"Repository\":\"prom/prometheus\",\"Tag\":\"v3.2.1\",\"Platform\":\"linux/amd64\",\"Size\":414931465,\"Created\":\"2025-02-26T09:46:12.292017399Z\",\"LastTagTime\":\"2026-11-06T18:44:05.982777275Z\"},{\"ID\":\"sha256:b5faa81a7fbd8943a8066f2455164d5fdc88638e3f840acb042fe0afd180e1a7\",\"ContainerName\":\"realtime-fraud-detection-feature-writer-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:0791fc870d879f0d710e14616250461a3c1121f6ddfe2bb8603061365e1c5b3e\",\"ContainerName\":\"realtime-fraud-detection-explainer-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:54b9abc05f2f47e5a82a6a843a997e1b5881e6eccdd0a92637b254953513a271\",\"ContainerName\":\"realtime-fraud-detection-mlflow-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:fa6c84bc5c75509b7fe2b028754b3b4c60314c98c93dfad9bb452041da0af82a\",\"ContainerName\":\"realtime-fraud-detection-scorer-shadow-1\",\"Repository\":\"\",\"Tag\":\"\",\"Platform\":\"unknown\",\"Size\":0},{\"ID\":\"sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1\",\"ContainerName\":\"realtime-fraud-detection-postgres-1\",\"Repository\":\"postgres\",\"Tag\":\"17\",\"Platform\":\"linux/amd64\",\"Size\":639991864,\"Created\":\"2026-10-28T01:31:27.199954911Z\",\"LastTagTime\":\"2026-11-05T01:17:13.393663666Z\"}]"
+}

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="p95 latency versus offered rate">
+<style>text{font:12px sans-serif;fill:#333}.ax{stroke:#999}.ln{fill:none;stroke:#2563eb;stroke-width:2}.bud{stroke:#dc2626;stroke-dasharray:6 4}</style>
+<line class="ax" x1="60" y1="310" x2="620" y2="310"/>
+<line class="ax" x1="60" y1="20" x2="60" y2="310"/>
+<text x="52" y="314.0" text-anchor="end">1</text>
+<text x="52" y="256.0" text-anchor="end">10</text>
+<text x="52" y="198.0" text-anchor="end">100</text>
+<text x="52" y="140.0" text-anchor="end">1,000</text>
+<text x="52" y="82.0" text-anchor="end">10,000</text>
+<text x="52" y="24.0" text-anchor="end">100,000</text>
+<line class="bud" x1="60" y1="199.6" x2="620" y2="199.6"/>
+<text x="620" y="193.6" text-anchor="end">80 ms budget</text>
+<polyline class="ln" points="60.0,231.1 172.0,218.0 284.0,199.3 396.0,102.7 508.0,64.6 620.0,36.2"/>
+<circle cx="60.0" cy="231.1" r="4" fill="#2563eb"/>
+<text x="60.0" y="328" text-anchor="middle">100</text>
+<circle cx="172.0" cy="218.0" r="4" fill="#2563eb"/>
+<text x="172.0" y="328" text-anchor="middle">200</text>
+<circle cx="284.0" cy="199.3" r="4" fill="#2563eb"/>
+<text x="284.0" y="328" text-anchor="middle">300</text>
+<circle cx="396.0" cy="102.7" r="4" fill="#2563eb"/>
+<text x="396.0" y="328" text-anchor="middle">400</text>
+<circle cx="508.0" cy="64.6" r="4" fill="#2563eb"/>
+<text x="508.0" y="328" text-anchor="middle">500</text>
+<circle cx="620.0" cy="36.2" r="4" fill="#2563eb"/>
+<text x="620.0" y="328" text-anchor="middle">600</text>
+<text x="340.0" y="352" text-anchor="middle">offered rate (events/s)</text>
+<text transform="translate(14 165.0) rotate(-90)" text-anchor="middle">p95 end-to-end (ms, log)</text>
+</svg>
