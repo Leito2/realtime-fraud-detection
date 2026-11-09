@@ -15,7 +15,7 @@ Every number is a measurement from `docs/results/` on one 8 GB Windows laptop (W
 | Model vs rules | PR-AUC 0.590 vs 0.164, recall at 1% FPR 0.674 vs 0.260 | [Rules vs models](#rules-vs-models-test-days-never-seen-in-training) |
 | ONNX vs native XGBoost | 0.021 ms vs 0.468 ms per call at batch 1 (22x); parity ONNX-Triton 1.2e-7; Triton adds about 0.7-0.9 ms | [E4](#serving-guarantees-windows-and-scaling-e4-e7-e10) |
 | Longer windows | `slow_fraud` recall 1.1% -> 21.1% with 1 h / 24 h features | E7 |
-| gRPC vs REST | p50 4.1 vs 6.3 ms, p99 8.7-10.8 vs 15.4 ms at 100 req/s (streaming: no valid result) | [E11](#scorer-batching-shadow-tracing-and-the-api-e2-e8-e9-e11) |
+| gRPC vs REST | p50 4.1 vs 6.3 ms, p99 8.7-10.8 vs 15.4 ms at 100 req/s (stream: p50 9.2 ms, slower than unary) | [E11](#scorer-batching-shadow-tracing-and-the-api-e2-e8-e9-e11) |
 | Exactly-once | 0 duplicates after killing the TaskManager (1539 with at-least-once); p95 25 ms -> 1.1 s | [E5, F10](#resilience-what-happens-when-things-break-f0-f10) |
 | Failure experiments | 11 fault experiments plus a control: 10 of the 11 confirmed; F1 (39 s restart) refuted; 0 events lost in all | [F0-F10](#resilience-what-happens-when-things-break-f0-f10) |
 | Shadow challenger | not free here: p50 +0.5-4 ms with the shadow on (E8) | E8 |
@@ -436,9 +436,10 @@ schedule), 3 repetitions. gRPC unary is about a third faster at the median and a
 |---|---|---|---|
 | rest | 6.28 | 9.68 | 15.38 |
 | grpc | 4.15 | 6.27 | 10.16 |
+| grpc-stream | 9.23 | 12.79 | 19.28 |
 
-Per run (the **bidirectional stream has no valid result**: the benchmark client, not the server, fell behind its
-schedule; see `docs/results/e11-grpc-vs-rest.md`):
+Per run (the bidirectional stream is slower than unary: one stream is one handler, so responses queue in order;
+the first two client designs were invalid, see `docs/results/e11-grpc-vs-rest.md`):
 
 | mode | rep | p50 | p95 | p99 | start lag p99 | valid | failed requests |
 |---|---|---|---|---|---|---|---|
@@ -448,9 +449,9 @@ schedule; see `docs/results/e11-grpc-vs-rest.md`):
 | grpc | 2 | 4.15 | 6.59 | 10.75 | 1.35 | True | 0 |
 | rest | 3 | 6.23 | 9.88 | 15.38 | 1.86 | True | 0 |
 | grpc | 3 | 4.09 | 6.06 | 8.66 | 1.26 | True | 0 |
-| grpc-stream | 1 | 11.47 | 137.30 | 281.39 | 67.84 | False | 110 |
-| grpc-stream | 2 | 9.67 | 21.85 | 121.21 | 14.76 | False | 0 |
-| grpc-stream | 3 | 10.09 | 26.93 | 158.91 | 61.97 | False | 49 |
+| grpc-stream | 1 | 9.20 | 14.39 | 23.28 | 2.26 | True | 0 |
+| grpc-stream | 2 | 9.29 | 12.79 | 19.28 | 2.05 | True | 0 |
+| grpc-stream | 3 | 9.23 | 11.38 | 14.83 | 1.80 | True | 0 |
 
 ### Resilience: what happens when things break (F0-F10)
 
@@ -494,9 +495,11 @@ Three results are worth reading as numbers rather than verdicts:
   turn "Redis is gone" into "27% of decisions use the conservative degraded policy for a few seconds"; before them
   every micro-batch blocked for about 4 s in name resolution.
 
-Two hypotheses were refuted and stay refuted: the Flink restart takes 39 s, not 30, and a 20 s broker restart
-leaves the decisions topic silent for 130 s, far longer than the outage. Neither lost an event. The cause of the
-130 s was not isolated; it is listed as open in PLAN §16 rather than explained by a guess.
+One hypothesis stays refuted: the Flink restart takes 39 s, not 30. F5 was refuted on a loaded host (130 s of
+silence with every service up) and confirmed on a rerun with only the pipeline running (79.9 s, 88 s recovery).
+A separate isolation run shows which stage waits: Flink resumes in the first sample after the broker is back, the
+scorer's consumer group takes about 12 s more to rejoin ([`docs/results/f5-isolate.md`](docs/results/f5-isolate.md)).
+Nothing was lost in any run.
 
 ## Part V — Run It Yourself
 
@@ -526,9 +529,9 @@ The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 ### Limitations (what was not measured or not achieved)
 * **Hardware.** 8 GB with WSL2 at about 5 GB. Rates above 200 ev/s were not sustained; four scorer processes, Triton under many clients and any run above one generator were not measured. Larger-machine numbers need larger-machine runs.
 * **Noisy host.** Several runs had to be repeated or discarded because the host was swapping; the experiments that still show wide tails (E4 end to end, E8, E9) say so next to the numbers.
-* **gRPC streaming** has no valid benchmark: the client, not the server, fell behind its schedule (E11).
-* **F5:** the silence after a broker restart depends on host load (130 s with every service up, 79.9 s with only the pipeline); which stage rejoins slowly was not isolated. **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
-* **Option B** (PyFlink keyed operator) is verified for correctness and cost of its Python logic (36 us/event) but the JVM-Python bridge in thread mode was not measured, so it is neither adopted nor rejected.
+* **gRPC streaming** was only measured at 100 req/s from one Python client; higher rates were not driven (E11).
+* **F5:** the silence after a broker restart depends on host load (130 s with every service up, 79.9 s with only the pipeline); the stage that waits is the scorer's consumer group (about 12 s to rejoin after the broker is back; Flink resumes at once, [isolation run](docs/results/f5-isolate.md)). **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
+* **Option B** (PyFlink keyed operator): correct and cheap in plain Python (36 us/event). Through PyFlink's process-mode bridge it runs at 6.2k-6.6k ev/s per slot (upper bound: Flink keyed state not included) ([E7 bridge](docs/results/e7-option-b-bridge.md)); thread mode would not start (pemja native library not found, 4 attempts). Not adopted: the cost is a second runtime in the Flink image, not throughput.
 * **No real data.** Everything runs on a synthetic generator; IEEE-CIS was not used (it needs a Kaggle download with account credentials).
 * The shadow challenger is isolated logically, not physically: it shares the CPU with the champion (E8).
 

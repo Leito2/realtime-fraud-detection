@@ -10,9 +10,9 @@ Same model and the same scorer use case (`ScoreSync`), one client process at 100
 | grpc | 2 | 4.15 | 6.59 | 10.75 | 1.35 | True | 0 |
 | rest | 3 | 6.23 | 9.88 | 15.38 | 1.86 | True | 0 |
 | grpc | 3 | 4.09 | 6.06 | 8.66 | 1.26 | True | 0 |
-| grpc-stream | 1 | 11.47 | 137.30 | 281.39 | 67.84 | False | 110 |
-| grpc-stream | 2 | 9.67 | 21.85 | 121.21 | 14.76 | False | 0 |
-| grpc-stream | 3 | 10.09 | 26.93 | 158.91 | 61.97 | False | 49 |
+| grpc-stream | 1 | 9.20 | 14.39 | 23.28 | 2.26 | True | 0 |
+| grpc-stream | 2 | 9.29 | 12.79 | 19.28 | 2.05 | True | 0 |
+| grpc-stream | 3 | 9.23 | 11.38 | 14.83 | 1.80 | True | 0 |
 
 Median of the valid repetitions:
 
@@ -20,5 +20,6 @@ Median of the valid repetitions:
 |---|---|---|---|
 | rest | 6.28 | 9.68 | 15.38 |
 | grpc | 4.15 | 6.27 | 10.16 |
+| grpc-stream | 9.23 | 12.79 | 19.28 |
 
-**gRPC bidirectional streaming has no valid result.** All six stream runs are in the table above: three with the first client (every request failed with `InvalidStateError`: grpc.aio allows one pending write per call), three after serializing the writes (the stream works, p50 about 10 ms, but the client's own start lag is 15-68 ms, so the run is invalid). The benchmark client, not the server, is the limit; a client with one write coroutine fed by a queue would be the next step. Not fixed after three attempts.
+**gRPC bidirectional streaming.** Two earlier client designs gave invalid runs (every request failed with `InvalidStateError`, because grpc.aio allows one pending write per call; then writes behind a lock, with a client start lag of 15-68 ms). The third design has one writer coroutine fed by a queue and one reader that resolves futures in order: three valid runs (start lag p99 1.8-2.3 ms, 0 failures; the client also fails every waiting request if the stream breaks). The stream is *slower* than unary at the same 100 req/s: p50 9.2 ms vs 4.1 ms. One stream is one server handler that scores requests in order, so each response waits for the previous one; unary calls run concurrently. Streaming would pay off by removing per-call setup at much higher rates from one connection, which this host cannot drive (the single Python client is the ceiling), so no advantage is claimed.

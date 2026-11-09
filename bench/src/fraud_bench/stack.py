@@ -39,23 +39,36 @@ def flink_job_running() -> bool:
     return any(j["state"] == "RUNNING" for j in jobs)
 
 
+ALIVE = ("RUNNING", "RESTARTING", "INITIALIZING", "CREATED", "RECONCILING")
+
+
+def flink_job_alive() -> bool:
+    """Any job that is not finished: a job that is restarting still blocks a new submit."""
+    try:
+        with urllib.request.urlopen("http://localhost:8081/jobs/overview", timeout=3) as r:
+            jobs = json.load(r)["jobs"]
+    except Exception:
+        return False
+    return any(j["state"] in ALIVE for j in jobs)
+
+
 def cancel_flink_jobs() -> None:
-    """Cancel every RUNNING job on the session cluster (the next submit starts from the latest offsets)."""
+    """Cancel every live job on the session cluster (the next submit starts from the latest offsets)."""
     with urllib.request.urlopen("http://localhost:8081/jobs/overview", timeout=5) as r:
         jobs = json.load(r)["jobs"]
     for j in jobs:
-        if j["state"] == "RUNNING":
+        if j["state"] in ALIVE:
             req = urllib.request.Request(f"http://localhost:8081/jobs/{j['jid']}?mode=cancel", method="PATCH")
             urllib.request.urlopen(req, timeout=5).read()
-    wait(lambda: not flink_job_running(), "job cancelled", 60)
+    wait(lambda: not flink_job_alive(), "job cancelled", 60)
 
 
 def submit_flink(variant: dict | None = None, sql: str | None = None) -> None:
     """Submit the feature job with experiment overrides (see flink/submit-job.sh): BUFFER_TIMEOUT,
     CHECKPOINT_INTERVAL, DELIVERY_GUARANTEE, WATERMARK_DELAY. ``sql`` names a file under /opt/flink/sql."""
-    if flink_job_running():                  # submit-job.sh is idempotent: it would skip, dropping overrides
-        raise RuntimeError("a Flink job is already RUNNING: overrides would be ignored; "
-                           "call cancel_flink_jobs() first")
+    if flink_job_alive():                    # submit-job.sh is idempotent: it would skip, dropping overrides
+        raise RuntimeError("a Flink job is already alive (RUNNING, RESTARTING or INITIALIZING): overrides "
+                           "would be ignored; call cancel_flink_jobs() first")
     cmd = [*COMPOSE, "--profile", "core", "run", "--rm", "-T", "flink-job"]
     if sql:
         cmd += ["/opt/flink/submit-job.sh", f"/opt/flink/sql/{sql}"]   # run replaces the command

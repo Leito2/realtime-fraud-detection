@@ -24,10 +24,10 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 
 ## Open (nothing here blocks the rest)
 * **Blocked outside the repo:** IEEE-CIS needs a Kaggle download with account credentials.
-* F5: silence is load-dependent (130 s busy host vs 79.9 s quiet); the slow-rejoining stage is not isolated.
-* Option B: the PyFlink thread-mode JVM-Python bridge is not measured (needs a Flink image with Python);
-  `UserWindows` now rejects out-of-order timestamps and keeps exact integer sums.
-* gRPC bidirectional streaming has no valid benchmark (the client falls behind its own schedule; 3 attempts).
+* F5: silence is load-dependent (130 s busy host, 79.9 s quiet, 44 s in the light isolation run); the stage that waits is the scorer group rejoin (about 12 s), Flink resumes at once (`docs/results/f5-isolate.md`).
+* Option B: bridge measured in process mode (6.2k-6.6k ev/s, `docs/results/e7-option-b-bridge.md`); thread mode
+  failed to start (pemja library not found, 4 attempts, documented).
+* gRPC bidirectional streaming measured (3 valid runs, p50 9.2 ms); only 100 req/s from one client.
 * `tests/integration/test_feature_parity.py` failed intermittently once in three runs against the live Flink job;
   the full suite otherwise passed (391 passed, 1 skipped, 1 failed).
 * `submit_flink` does not verify that its overrides were applied when a job is already running.

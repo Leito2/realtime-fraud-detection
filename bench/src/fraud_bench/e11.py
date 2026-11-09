@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import collections
 import json
 import random
 import sys
@@ -183,39 +184,56 @@ async def run_grpc_stream(target: str, pool: list[dict], rate: float, duration_s
 
     requests = [to_proto(p) for p in pool]
     sizes = {"request_bytes": requests[0].ByteSize()}
-    pending: dict[int, asyncio.Future] = {}
     async with open_aio_channel(target) as channel:
         stub = pb_grpc.FraudScoringStub(channel)
         call = stub.ScoreStream(metadata=api_key_metadata(api_key))
-        order: asyncio.Queue = asyncio.Queue()
+        outbox: asyncio.Queue = asyncio.Queue()           # (request index, future) in send order
+        inflight: collections.deque = collections.deque()  # futures awaiting a response, same order
+
+        def fail_all(exc: BaseException) -> None:         # a broken stream fails every waiting request now
+            while inflight:
+                future = inflight.popleft()
+                if not future.done():
+                    future.set_exception(exc)
+            while not outbox.empty():
+                outbox.get_nowait()[1].set_exception(exc)
+
+        async def writer() -> None:                       # the only coroutine that writes: no lock, no races
+            try:
+                while True:
+                    i, future = await outbox.get()
+                    inflight.append(future)
+                    await call.write(requests[i % len(requests)])
+            except asyncio.CancelledError:
+                raise
+            except BaseException as exc:
+                fail_all(exc)
 
         async def reader() -> None:
-            async for response in call:
-                sizes.setdefault("response_bytes", response.ByteSize())
-                i = await order.get()
-                future = pending.pop(i)
-                if not future.done():                  # a response after the client's deadline is still read
-                    future.set_result(None)
+            try:
+                async for response in call:
+                    sizes.setdefault("response_bytes", response.ByteSize())
+                    if not inflight:
+                        raise RuntimeError("response without a pending request")
+                    future = inflight.popleft()
+                    if not future.done():                 # a late response is still read
+                        future.set_result(None)
+            except asyncio.CancelledError:
+                raise
+            except BaseException as exc:
+                fail_all(exc)
 
-        reader_task = asyncio.create_task(reader())
-
-        write_lock = asyncio.Lock()                    # grpc.aio allows one pending write per call
+        tasks = [asyncio.create_task(writer()), asyncio.create_task(reader())]
 
         async def send(i: int) -> None:
             future = asyncio.get_running_loop().create_future()
-            pending[i] = future
-            async with write_lock:                      # request order == response order on one stream
-                order.put_nowait(i)
-                try:
-                    await call.write(requests[i % len(requests)])
-                except BaseException:
-                    order.get_nowait()                  # nothing was sent: keep order aligned with responses
-                    raise
+            outbox.put_nowait((i, future))
             await asyncio.wait_for(future, deadline_s)
 
         samples = await open_loop(rate, duration_s, send)
         await call.done_writing()
-        reader_task.cancel()
+        for task in tasks:
+            task.cancel()
         return samples, sizes
 
 
