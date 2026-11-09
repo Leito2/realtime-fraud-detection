@@ -5,8 +5,8 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 `docs/resilience/`; the README has the tables.
 
 ## Done
-* **M8 closed**: failure experiments F0 (control) to F10 rerun on a clean baseline; 9 of the 11 fault hypotheses
-  confirmed, F1 (Flink restart 39 s vs 30 s) and F5 (130 s silence after a broker restart vs 120 s) refuted; 0 events
+* **M8 closed**: failure experiments F0 (control) to F10 rerun on a clean baseline; 10 of the 11 fault hypotheses
+  confirmed, F1 (Flink restart 39 s vs 30 s) refuted; F5 refuted on a loaded host (130 s) and confirmed on rerun with only the pipeline up (88 s); 0 events
   lost in every run. Exactly-once sink (F10, E5), runbooks, ADR-0014/0015.
 * **M7c**: `buf lint/breaking` in CI, README section, sync-vs-Flink residual-error report (exact for 89.1% of payments).
 * **M9**: Triton serving variant (adapter, repository publisher, profile `serving-triton`, ADR-0016) and E4; E5
@@ -24,9 +24,9 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 
 ## Open (nothing here blocks the rest)
 * **Blocked outside the repo:** IEEE-CIS needs a Kaggle download with account credentials.
-* Cause of the 130 s silence in F5 is not isolated.
+* F5: silence is load-dependent (130 s busy host vs 79.9 s quiet); the slow-rejoining stage is not isolated.
 * Option B: the PyFlink thread-mode JVM-Python bridge is not measured (needs a Flink image with Python);
-  `UserWindows` handles in-order events only and keeps a running float sum.
+  `UserWindows` now rejects out-of-order timestamps and keeps exact integer sums.
 * gRPC bidirectional streaming has no valid benchmark (the client falls behind its own schedule; 3 attempts).
 * `tests/integration/test_feature_parity.py` failed intermittently once in three runs against the live Flink job;
   the full suite otherwise passed (391 passed, 1 skipped, 1 failed).

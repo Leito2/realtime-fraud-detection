@@ -4,7 +4,9 @@ The operator logic is a plain class, testable without a Flink cluster: for the 1
 match ``velocity_reference`` exactly (the same function the Flink SQL job is tested against), and it adds the
 1 h and 24 h windows the SQL job cannot have next to it.
 """
+import collections
 import importlib.util
+import math
 import random
 from pathlib import Path
 
@@ -35,7 +37,7 @@ def test_ten_minute_window_matches_the_reference():
         got = states.setdefault(e["user_id"], user_state.UserWindows()).add(e["ts"], e["amount"])
         exact = [k for k in want if k != "f_sum_10m"]
         assert {k: got[k] for k in exact} == {k: want[k] for k in exact}
-        assert got["f_sum_10m"] == pytest.approx(want["f_sum_10m"])   # running sum: float drift, not exact
+        assert got["f_sum_10m"] == pytest.approx(want["f_sum_10m"])
 
 
 def test_long_windows_include_the_current_payment_and_the_exact_boundary():
@@ -51,3 +53,23 @@ def test_state_is_bounded_by_the_longest_window():
     for t in range(0, 3 * 86400, 60):
         w.add(float(t), 1.0)
     assert w.size() <= 86400 / 60 + 1
+
+
+def test_out_of_order_timestamp_is_rejected_not_silently_miscounted():
+    w = user_state.UserWindows()
+    w.add(100.0, 5.0)
+    with pytest.raises(ValueError, match="out of order"):
+        w.add(99.0, 5.0)
+    assert w.add(100.0, 1.0)["f_cnt_10m"] == 2                 # equal timestamps are peers, still fine
+
+
+def test_running_sums_are_exact_after_many_expiries():
+    rnd = random.Random(7)
+    w, live = user_state.UserWindows(), collections.deque()
+    for i in range(20_000):
+        ts, amount = i * 37.0, round(rnd.uniform(0.01, 999.99), 2)
+        live.append((ts, amount))
+        while live[0][0] < ts - 3600:                            # keep only the 1 h window for the reference
+            live.popleft()
+        got = w.add(ts, amount)
+        assert got["f_sum_1h"] == round(math.fsum(a for _, a in live), 2)   # cents-exact, no drift

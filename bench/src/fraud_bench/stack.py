@@ -53,6 +53,9 @@ def cancel_flink_jobs() -> None:
 def submit_flink(variant: dict | None = None, sql: str | None = None) -> None:
     """Submit the feature job with experiment overrides (see flink/submit-job.sh): BUFFER_TIMEOUT,
     CHECKPOINT_INTERVAL, DELIVERY_GUARANTEE, WATERMARK_DELAY. ``sql`` names a file under /opt/flink/sql."""
+    if flink_job_running():                  # submit-job.sh is idempotent: it would skip, dropping overrides
+        raise RuntimeError("a Flink job is already RUNNING: overrides would be ignored; "
+                           "call cancel_flink_jobs() first")
     cmd = [*COMPOSE, "--profile", "core", "run", "--rm", "-T", "flink-job"]
     if sql:
         cmd += ["/opt/flink/submit-job.sh", f"/opt/flink/sql/{sql}"]   # run replaces the command

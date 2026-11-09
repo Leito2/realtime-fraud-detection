@@ -17,7 +17,7 @@ Every number is a measurement from `docs/results/` on one 8 GB Windows laptop (W
 | Longer windows | `slow_fraud` recall 1.1% -> 21.1% with 1 h / 24 h features | E7 |
 | gRPC vs REST | p50 4.1 vs 6.3 ms, p99 8.7-10.8 vs 15.4 ms at 100 req/s (streaming: no valid result) | [E11](#scorer-batching-shadow-tracing-and-the-api-e2-e8-e9-e11) |
 | Exactly-once | 0 duplicates after killing the TaskManager (1539 with at-least-once); p95 25 ms -> 1.1 s | [E5, F10](#resilience-what-happens-when-things-break-f0-f10) |
-| Failure experiments | 11 fault experiments plus a control: 9 of the 11 confirmed; F1 (39 s restart) and F5 (130 s silence after a broker restart) refuted; 0 events lost in all | [F0-F10](#resilience-what-happens-when-things-break-f0-f10) |
+| Failure experiments | 11 fault experiments plus a control: 10 of the 11 confirmed; F1 (39 s restart) refuted; 0 events lost in all | [F0-F10](#resilience-what-happens-when-things-break-f0-f10) |
 | Shadow challenger | not free here: p50 +0.5-4 ms with the shadow on (E8) | E8 |
 
 The target of the plan (80 ms p95 at thousands of events per second) is **not** met on this hardware: the honest
@@ -472,7 +472,7 @@ kept next to the clean ones as `*-dirty-baseline` and are not used.
 | F2 | one of two scorers killed | confirmed | 0 | 5 | 12.0 s | 5 s | survivor takes over after one session timeout |
 | F3 | Redis stopped 30 s | confirmed | 0 | 0 | 0.4 s | 0 s | breaker: 27% of decisions degraded, none late |
 | F4 | Redis +20 ms | confirmed | 0 | 0 | 0.8 s | 3 s | deadline keeps p95 at baseline, 48% degraded |
-| F5 | Kafka broker restarted (20 s down) | **refuted** | 0 | 4 | 130 s | 140 s (limit 120 s) | nothing lost, but the pipeline is silent far longer than the outage |
+| F5 | Kafka broker restarted (20 s down) | confirmed (rerun, pipeline services only) | 0 | 2 | 79.9 s | 88 s (limit 120 s) | the first run, with dashboards and async scorers also up on the 8 GB host, was refuted: 130 s silence, 140 s recovery ([report](docs/resilience/F5-busy-host.md)) |
 | F6 | malformed payments | confirmed | 0 | 0 | 2.0 s | 5 s | invalid rows go to the DLQ, not into silence |
 | F6b | malformed enriched rows | confirmed | 0 | 0 | 0.5 s | 1 s | the scorer's DLQ takes them |
 | F7 | MLflow down + corrupt champion | confirmed | 0 | 0 | 3.3 s | 5 s | the previous model keeps serving |
@@ -527,7 +527,7 @@ The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 * **Hardware.** 8 GB with WSL2 at about 5 GB. Rates above 200 ev/s were not sustained; four scorer processes, Triton under many clients and any run above one generator were not measured. Larger-machine numbers need larger-machine runs.
 * **Noisy host.** Several runs had to be repeated or discarded because the host was swapping; the experiments that still show wide tails (E4 end to end, E8, E9) say so next to the numbers.
 * **gRPC streaming** has no valid benchmark: the client, not the server, fell behind its schedule (E11).
-* **F5:** the 130 s silence after a broker restart is not explained. **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
+* **F5:** the silence after a broker restart depends on host load (130 s with every service up, 79.9 s with only the pipeline); which stage rejoins slowly was not isolated. **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
 * **Option B** (PyFlink keyed operator) is verified for correctness and cost of its Python logic (36 us/event) but the JVM-Python bridge in thread mode was not measured, so it is neither adopted nor rejected.
 * **No real data.** Everything runs on a synthetic generator; IEEE-CIS was not used (it needs a Kaggle download with account credentials).
 * The shadow challenger is isolated logically, not physically: it shares the CPU with the champion (E8).

@@ -5,10 +5,10 @@ All payments of a user arrive within seconds, so no payment expires: this pins t
 (current payment included, per-user isolation, count/sum/max/small-payment count). Expiry is covered by the
 reference's unit tests.
 
-Each payment is flushed on its own. Flink's RANGE window treats rows processed in the same millisecond as
-peers and aggregates them together, so two payments of one user that reach Flink in the same fetch batch both
-see each other (measured in M2, PLAN.md §3.3 spike S1). Sequential sends keep this test on the intended
-semantics; the burst effect is documented, not hidden.
+Each payment is sent only after the previous one came back enriched. Flink's RANGE window treats rows
+processed in the same millisecond as peers and aggregates them together, so two payments of one user that
+reach Flink in the same fetch batch both see each other (measured in M2, PLAN.md §3.3 spike S1). One payment
+in flight keeps this test on the intended semantics; the burst effect is documented, not hidden.
 """
 import json
 import random
@@ -62,21 +62,23 @@ def test_flink_velocity_matches_the_offline_reference():
         consumer.poll(0.2)
 
     producer = Producer({"bootstrap.servers": BOOTSTRAP, "linger.ms": 0})
+    got: dict[str, EnrichedPayment] = {}
     for p in sent:                                           # per-user order = partition order
         producer.produce("payments", key=p["user_id"], value=json.dumps(p))
         producer.flush(10)
-        time.sleep(0.01)          # RANGE windows treat rows of one millisecond as peers (CLAUDE.md gotcha)
-
-    got: dict[str, EnrichedPayment] = {}
-    deadline = time.monotonic() + 60
+        # wait for this payment's enriched row before sending the next: no two payments are ever in flight,
+        # so the RANGE window cannot see same-millisecond peers however slow the host is (a fixed sleep
+        # was not enough: under load Flink read several payments in one fetch and the test went flaky)
+        deadline = time.monotonic() + 30
+        while p["payment_id"] not in got and time.monotonic() < deadline:
+            msg = consumer.poll(0.2)
+            if msg is None or msg.error():
+                continue
+            event = EnrichedPayment.model_validate_json(msg.value())
+            if event.payment_id.startswith(run):
+                got.setdefault(event.payment_id, event)      # first copy: a replay must not rewrite it
+        assert p["payment_id"] in got, f"no enriched event for {p['payment_id']} within 30 s"
     wanted = {p["payment_id"] for p in sent}
-    while len(got) < len(wanted) and time.monotonic() < deadline:
-        msg = consumer.poll(0.5)
-        if msg is None or msg.error():
-            continue
-        event = EnrichedPayment.model_validate_json(msg.value())
-        if event.payment_id in wanted:
-            got[event.payment_id] = event
     consumer.close()
     assert len(got) == len(wanted), f"only {len(got)}/{len(wanted)} enriched events arrived"
 

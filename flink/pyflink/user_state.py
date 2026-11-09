@@ -14,6 +14,7 @@ from itertools import islice
 
 SMALL_TX_AMOUNT = 10.0                                  # pinned to flink/sql/*.sql by tests/test_features
 WINDOWS_S = {"10m": 600, "1h": 3600, "24h": 86400}
+_UNITS = 1_000_000                                      # sums kept as integer micro-units: exact
 
 
 class UserWindows:
@@ -23,18 +24,24 @@ class UserWindows:
         self._events: deque[tuple[float, float]] = deque()          # (ts, amount), oldest first
         self._start = dict.fromkeys(WINDOWS_S, 0)                    # oldest event index per window
         self._cnt = dict.fromkeys(WINDOWS_S, 0)
-        self._sum = dict.fromkeys(WINDOWS_S, 0.0)
+        self._sum = dict.fromkeys(WINDOWS_S, 0)                      # micro-units (int)
         self._small = dict.fromkeys(WINDOWS_S, 0)
         self._dropped = 0                                            # events already popped from the left
+        self._last_ts = float("-inf")
 
     def size(self) -> int:
         return len(self._events)
 
     def add(self, ts: float, amount: float) -> dict:
+        """Add one payment; timestamps must not go backwards (keyed operators see event-time order)."""
+        if ts < self._last_ts:
+            raise ValueError(f"timestamp {ts} out of order (last {self._last_ts})")
+        self._last_ts = ts
+        units = round(amount * _UNITS)
         self._events.append((ts, amount))
         for name, span in WINDOWS_S.items():
             self._cnt[name] += 1
-            self._sum[name] += amount
+            self._sum[name] += units
             self._small[name] += amount < SMALL_TX_AMOUNT
             lo = self._start[name]
             while True:                                              # expire what left this window
@@ -42,7 +49,7 @@ class UserWindows:
                 if t >= ts - span:
                     break
                 self._cnt[name] -= 1
-                self._sum[name] -= a
+                self._sum[name] -= round(a * _UNITS)
                 self._small[name] -= a < SMALL_TX_AMOUNT
                 lo += 1
             self._start[name] = lo
@@ -55,7 +62,7 @@ class UserWindows:
         row = {}
         for name in WINDOWS_S:
             row[f"f_cnt_{name}"] = self._cnt[name]
-            row[f"f_sum_{name}"] = float(self._sum[name])
+            row[f"f_sum_{name}"] = self._sum[name] / _UNITS
             row[f"f_small_tx_cnt_{name}"] = self._small[name]
             lo = self._start[name] - self._dropped
             row[f"f_max_{name}"] = float(max(a for _, a in islice(self._events, lo, None)))
