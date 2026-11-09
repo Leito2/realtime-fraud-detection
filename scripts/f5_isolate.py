@@ -1,12 +1,14 @@
 """F5 isolation: after a broker restart, which stage is silent and for how long.
 
-Runs 200 ev/s for 40 s, stops Kafka for 20 s, starts it, and samples the end offsets of ``payments``,
-``payments-enriched`` and ``decisions`` every 2 s for 170 s. The stage that stays flat longest is the one
-that rejoins slowly (producer -> Flink -> scorer). Needs the stack up; run it on a quiet machine.
+Runs 200 ev/s for F5_PRE_S s (40), stops Kafka for 20 s, starts it, and samples the end offsets of
+``payments``, ``payments-enriched`` and ``decisions`` every 2 s until F5_TOTAL_S (170). The stage
+that stays flat longest is the one that rejoins slowly (producer -> Flink -> scorer). Needs the stack up;
+run it on a quiet machine.
 
     uv run python scripts/f5_isolate.py > docs/results/f5-isolate.md
 """
 
+import os
 import subprocess
 import sys
 import threading
@@ -18,7 +20,8 @@ from fraud_bench.stack import COMPOSE, ROOT, TOOLS
 BOOTSTRAP = "localhost:9092"
 TOPICS = ["payments", "payments-enriched", "decisions"]
 EVERY = 2.0
-TOTAL_S = 170
+TOTAL_S = int(os.environ.get("F5_TOTAL_S", 170))
+PRE_S = int(os.environ.get("F5_PRE_S", 40))            # seconds of steady load before the fault
 
 
 def sample(rows: list, stop: threading.Event) -> None:
@@ -55,7 +58,7 @@ def main() -> None:
     t0 = time.monotonic()
     probe = threading.Thread(target=sample, args=(rows, stop), daemon=True)
     probe.start()
-    time.sleep(40)
+    time.sleep(PRE_S)
     fault_at = round(time.monotonic() - t0)
     try:
         subprocess.run([*COMPOSE, "stop", "kafka"], cwd=ROOT, check=False, capture_output=True)

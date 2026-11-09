@@ -473,7 +473,7 @@ kept next to the clean ones as `*-dirty-baseline` and are not used.
 | F2 | one of two scorers killed | confirmed | 0 | 5 | 12.0 s | 5 s | survivor takes over after one session timeout |
 | F3 | Redis stopped 30 s | confirmed | 0 | 0 | 0.4 s | 0 s | breaker: 27% of decisions degraded, none late |
 | F4 | Redis +20 ms | confirmed | 0 | 0 | 0.8 s | 3 s | deadline keeps p95 at baseline, 48% degraded |
-| F5 | Kafka broker restarted (20 s down) | confirmed (rerun, pipeline services only) | 0 | 2 | 79.9 s | 88 s (limit 120 s) | the first run, with dashboards and async scorers also up on the 8 GB host, was refuted: 130 s silence, 140 s recovery ([report](docs/resilience/F5-busy-host.md)) |
+| F5 | Kafka broker restarted (20 s down) | confirmed (3 clean runs) | 0 | 2-3 | 40.9-41.6 s | 43-44 s (limit 120 s) | the 130 s and 79.9 s runs were polluted: every service up, or a baseline with a leftover backlog ([report](docs/resilience/F5-busy-host.md)) |
 | F6 | malformed payments | confirmed | 0 | 0 | 2.0 s | 5 s | invalid rows go to the DLQ, not into silence |
 | F6b | malformed enriched rows | confirmed | 0 | 0 | 0.5 s | 1 s | the scorer's DLQ takes them |
 | F7 | MLflow down + corrupt champion | confirmed | 0 | 0 | 3.3 s | 5 s | the previous model keeps serving |
@@ -496,7 +496,8 @@ Three results are worth reading as numbers rather than verdicts:
   every micro-batch blocked for about 4 s in name resolution.
 
 One hypothesis stays refuted: the Flink restart takes 39 s, not 30. F5 was refuted on a loaded host (130 s of
-silence with every service up) and confirmed on a rerun with only the pipeline running (79.9 s, 88 s recovery).
+silence with every service up), then three runs with only the pipeline running gave 79.9 s (that run warned of a
+leftover backlog in its baseline), 41.6 s and 40.9 s, with 43-44 s recovery in the last two.
 A separate isolation run shows which stage waits: Flink resumes in the first sample after the broker is back, the
 scorer's consumer group takes about 12 s more to rejoin ([`docs/results/f5-isolate.md`](docs/results/f5-isolate.md)).
 Nothing was lost in any run.
@@ -530,7 +531,7 @@ The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 * **Hardware.** 8 GB with WSL2 at about 5 GB. Rates above 200 ev/s were not sustained; four scorer processes, Triton under many clients and any run above one generator were not measured. Larger-machine numbers need larger-machine runs.
 * **Noisy host.** Several runs had to be repeated or discarded because the host was swapping; the experiments that still show wide tails (E4 end to end, E8, E9) say so next to the numbers.
 * **gRPC streaming** was only measured at 100 req/s from one Python client; higher rates were not driven (E11).
-* **F5:** the silence after a broker restart depends on host load (130 s with every service up, 79.9 s with only the pipeline); the stage that waits is the scorer's consumer group (about 12 s to rejoin after the broker is back; Flink resumes at once, [isolation run](docs/results/f5-isolate.md)). **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
+* **F5:** the silence after a broker restart is about 41 s on a clean baseline (20 s down plus about 21 s of restart and rejoin; the scorer group is the stage that waits, Flink resumes at once, [isolation](docs/results/f5-isolate.md)); a loaded host or a leftover backlog stretches it to 80-130 s. **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
 * **Option B** (PyFlink keyed operator): correct and cheap in plain Python (36 us/event). Through PyFlink's process-mode bridge it runs at 6.2k-6.6k ev/s per slot (upper bound: Flink keyed state not included) ([E7 bridge](docs/results/e7-option-b-bridge.md)); thread mode would not start (pemja native library not found, 4 attempts). Not adopted: the cost is a second runtime in the Flink image, not throughput.
 * **No real data.** Everything runs on a synthetic generator; IEEE-CIS was not used (it needs a Kaggle download with account credentials).
 * The shadow challenger is isolated logically, not physically: it shares the CPU with the champion (E8).

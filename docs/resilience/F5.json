@@ -9,12 +9,12 @@
   "rate": 200,
   "produced": 72000,
   "lost": 0,
-  "duplicated_extra": 2,
-  "recovery_s": 88.0,
-  "longest_gap_s": 79.93,
-  "baseline_p95_ms": 37.573899,
-  "degraded_share_after": 0.4583,
+  "duplicated_extra": 3,
+  "recovery_s": 43.0,
+  "longest_gap_s": 40.94,
+  "baseline_p95_ms": 23.219491,
+  "degraded_share_after": 0.0137,
   "dlq_growth": 0,
   "lost_sample": [],
-  "run_at": "2026-11-09T10:41:49"
+  "run_at": "2026-11-09T12:19:35"
 }

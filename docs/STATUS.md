@@ -6,7 +6,7 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 
 ## Done
 * **M8 closed**: failure experiments F0 (control) to F10 rerun on a clean baseline; 10 of the 11 fault hypotheses
-  confirmed, F1 (Flink restart 39 s vs 30 s) refuted; F5 refuted on a loaded host (130 s) and confirmed on rerun with only the pipeline up (88 s); 0 events
+  confirmed, F1 (Flink restart 39 s vs 30 s) refuted; F5 refuted on a loaded host (130 s) and confirmed on three later runs (79.9 s with a polluted baseline, then 41.6 s and 40.9 s); 0 events
   lost in every run. Exactly-once sink (F10, E5), runbooks, ADR-0014/0015.
 * **M7c**: `buf lint/breaking` in CI, README section, sync-vs-Flink residual-error report (exact for 89.1% of payments).
 * **M9**: Triton serving variant (adapter, repository publisher, profile `serving-triton`, ADR-0016) and E4; E5
@@ -24,7 +24,7 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 
 ## Open (nothing here blocks the rest)
 * **Blocked outside the repo:** IEEE-CIS needs a Kaggle download with account credentials.
-* F5: silence is load-dependent (130 s busy host, 79.9 s quiet, 44 s in the light isolation run); the stage that waits is the scorer group rejoin (about 12 s), Flink resumes at once (`docs/results/f5-isolate.md`).
+* F5 closed: about 41 s of silence on a clean baseline (two clean reruns plus two isolation runs of 37-44 s); the 79.9 s run had a backlog warning in its baseline; the scorer group rejoin is the waiting stage.
 * Option B: bridge measured in process mode (6.2k-6.6k ev/s, `docs/results/e7-option-b-bridge.md`); thread mode
   failed to start (pemja library not found, 4 attempts, documented).
 * gRPC bidirectional streaming measured (3 valid runs, p50 9.2 ms); only 100 req/s from one client.
