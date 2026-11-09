@@ -4,9 +4,9 @@
 
 | measure | value |
 |---|---|
-| p50 | 32.8 us |
-| p95 | 61.9 us |
-| p99 | 96.6 us |
-| mean | 36.06 us |
-| events/s on one core (mean) | 27,734 |
+| p50 | 13.7 us |
+| p95 | 24.9 us |
+| p99 | 62.8 us |
+| mean | 16.06 us |
+| events/s on one core (mean) | 62,286 |
 | buffer, median / max events per user | 145 / 180 |

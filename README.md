@@ -18,7 +18,7 @@ Every number is a measurement from `docs/results/` on one 8 GB Windows laptop (W
 | gRPC vs REST | p50 4.1 vs 6.3 ms, p99 8.7-10.8 vs 15.4 ms at 100 req/s (stream: p50 9.2 ms, slower than unary) | [E11](#scorer-batching-shadow-tracing-and-the-api-e2-e8-e9-e11) |
 | Exactly-once | 0 duplicates after killing the TaskManager (1539 with at-least-once); p95 25 ms -> 1.1 s | [E5, F10](#resilience-what-happens-when-things-break-f0-f10) |
 | Failure experiments | 11 fault experiments plus a control: 10 of the 11 confirmed; F1 (39 s restart) refuted; 0 events lost in all | [F0-F10](#resilience-what-happens-when-things-break-f0-f10) |
-| Shadow challenger | not free here: p50 +0.5-4 ms with the shadow on (E8) | E8 |
+| Shadow challenger | not free here: p50 +0.4-5.5 ms with the shadow on (E8) | E8 |
 
 The target of the plan (80 ms p95 at thousands of events per second) is **not** met on this hardware: the honest
 number is 200 ev/s. The design is not the limit so much as one laptop running Kafka, Flink and the scorer together.
@@ -314,18 +314,18 @@ ONNX vs Triton: max difference 1.2e-7. The comparison under many concurrent clie
 | 128 | 0.8243 | 21.4424 | 0.2565 | 0.7743 | 0.9166 | 1.5966 |
 | 500 | 1.7622 | 17.2914 | 0.7928 | 1.6515 | 1.4195 | 3.959 |
 
-End to end (scorer on ONNX in-process vs as a Triton client, low rates, a noisy host, so compare p50 and not the tails):
+End to end (scorer on ONNX in-process vs as a Triton client; quiet machine, 2 repetitions per cell, compare the p50: the tails move between repetitions):
 
 | variant | rate (ev/s) | rep | p50 | p95 | p99 | lost | lag stable |
 |---|---|---|---|---|---|---|---|
-| onnx | 200 | 1 | 16.703 | 330.751 | 1102.847 | 0 | True |
-| onnx | 200 | 2 | 16.415 | 35.423 | 84.415 | 0 | True |
-| onnx | 400 | 1 | 20.511 | 73.023 | 174.591 | 0 | True |
-| onnx | 400 | 2 | 23.263 | 217.343 | 1167.359 | 0 | True |
-| triton | 200 | 1 | 19.343 | 42.367 | 83.391 | 0 | True |
-| triton | 200 | 2 | 19.967 | 45.983 | 92.991 | 0 | True |
-| triton | 400 | 1 | 25.967 | 103.999 | 280.575 | 0 | True |
-| triton | 400 | 2 | 25.567 | 78.591 | 135.167 | 0 | True |
+| onnx | 200 | 1 | 18.895 | 82.943 | 690.175 | 0 | True |
+| onnx | 200 | 2 | 17.647 | 47.647 | 188.671 | 0 | True |
+| onnx | 400 | 1 | 23.535 | 111.551 | 217.087 | 0 | True |
+| onnx | 400 | 2 | 24.815 | 88.831 | 183.935 | 0 | True |
+| triton | 200 | 1 | 19.903 | 1580.031 | 5787.647 | 0 | True |
+| triton | 200 | 2 | 24.223 | 825.343 | 2639.871 | 0 | True |
+| triton | 400 | 1 | 28.207 | 152.319 | 355.839 | 0 | True |
+| triton | 400 | 2 | 32.511 | 204.543 | 400.639 | 0 | True |
 
 **E5 - what exactly-once costs** (`make e5`; ADR-4). Same load, Flink sink at-least-once vs transactional. A row
 becomes visible when its checkpoint commits, so the checkpoint interval is the latency floor.
@@ -350,7 +350,7 @@ as lost are the last events still held by the watermark when the load stops (0.5
 **E7 - do longer velocity windows pay off?** (`make e7`; PLAN §3.3). Same XGBoost, same temporal split, with and
 without 1 h and 24 h counts and sums. `slow_fraud`, a few payments spread over hours, goes from nearly invisible
 to a fifth detected. Flink SQL cannot give both windows in one job; option B (a keyed operator,
-`flink/pyflink/user_state.py`) matches the 10-minute reference exactly and costs 36.06 us per event in CPython. The PyFlink
+`flink/pyflink/user_state.py`) matches the 10-minute reference exactly and costs 16.06 us per event in CPython (monotonic-deque maximum). The PyFlink
 thread-mode bridge between the JVM and Python is **not** measured, so option B is neither adopted nor ruled out.
 
 | | 10-minute features only | + 1 h and 24 h |
@@ -398,18 +398,19 @@ here (p95 33 and 44 ms against 74-81 ms for batches of 1 and 50).
 
 **E8 - does the shadow challenger touch the champion?** (`scripts/e8_shadow.py`; ADR-6). The shadow is a separate
 consumer group that only writes to `shadow-scores`, so the expectation was "no effect". On this 8 GB laptop it is
-not zero: with the shadow on, the p50 is 0.5-4 ms higher in each of the three pairs, and the median p95 is 77 ms
-against 52 ms (one run on each side is invalid, so treat the p95 as a hint, not a measurement). The shadow competes
+not zero: with the shadow on, the p50 is 0.4-5.5 ms higher in each of the three pairs, and the median p95 is 265 ms
+against 54 ms (rerun on a quiet machine after the final fixes; one "on" run is invalid, and the p95 swings between
+repetitions, 94-273 ms with the shadow on, so treat the p95 as a hint, not a measurement). The shadow competes
 for the same CPU; the isolation is logical (own group, own topic), not physical.
 
 | shadow | rep | p50 | p95 | p99 | lost | valid |
 |---|---|---|---|---|---|---|
-| off | 1 | 17.407 | 47.423 | 104.447 | 0 | True |
-| on | 1 | 21.663 | 277.759 | 894.975 | 0 | False |
-| off | 2 | 18.815 | 51.839 | 98.815 | 0 | True |
-| on | 2 | 21.135 | 77.183 | 171.135 | 0 | True |
-| off | 3 | 20.047 | 104.063 | 353.279 | 0 | False |
-| on | 3 | 20.511 | 74.559 | 140.543 | 0 | True |
+| off | 1 | 15.279 | 31.279 | 82.303 | 0 | True |
+| on | 1 | 18.319 | 273.407 | 805.375 | 0 | True |
+| off | 2 | 16.511 | 53.503 | 138.623 | 0 | True |
+| on | 2 | 22.015 | 94.015 | 155.135 | 0 | True |
+| off | 3 | 22.911 | 115.967 | 182.911 | 0 | True |
+| on | 3 | 23.263 | 265.471 | 970.751 | 0 | False |
 
 **E9 - cost of observing** (`scripts/e9_tracing.py`). Tracing off, 1% and 100% of payments carrying a `traceparent`
 and exporting spans. The host had a bad stretch during this experiment (several runs invalid, one "off" run with a
@@ -532,7 +533,7 @@ The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 * **Noisy host.** Several runs had to be repeated or discarded because the host was swapping; the experiments that still show wide tails (E4 end to end, E8, E9) say so next to the numbers.
 * **gRPC streaming** was only measured at 100 req/s from one Python client; higher rates were not driven (E11).
 * **F5:** the silence after a broker restart is about 41 s on a clean baseline (20 s down plus about 21 s of restart and rejoin; the scorer group is the stage that waits, Flink resumes at once, [isolation](docs/results/f5-isolate.md)); a loaded host or a leftover backlog stretches it to 80-130 s. **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
-* **Option B** (PyFlink keyed operator): correct and cheap in plain Python (36 us/event). Through PyFlink's process-mode bridge it runs at 6.2k-6.6k ev/s per slot (upper bound: Flink keyed state not included) ([E7 bridge](docs/results/e7-option-b-bridge.md)); thread mode would not start (pemja native library not found, 4 attempts). Not adopted: the cost is a second runtime in the Flink image, not throughput.
+* **Option B** (PyFlink keyed operator): correct and cheap in plain Python (16 us/event). Through PyFlink's process-mode bridge it runs at 6.3k-7.9k ev/s per slot (upper bound: Flink keyed state not included) ([E7 bridge](docs/results/e7-option-b-bridge.md)); thread mode would not start (pemja native library not found, 4 attempts). Not adopted: the cost is a second runtime in the Flink image, not throughput.
 * **No real data.** Everything runs on a synthetic generator; IEEE-CIS was not used (it needs a Kaggle download with account credentials).
 * The shadow challenger is isolated logically, not physically: it shares the CPU with the champion (E8).
 

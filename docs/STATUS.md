@@ -25,7 +25,7 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 ## Open (nothing here blocks the rest)
 * **Blocked outside the repo:** IEEE-CIS needs a Kaggle download with account credentials.
 * F5 closed: about 41 s of silence on a clean baseline (two clean reruns plus two isolation runs of 37-44 s); the 79.9 s run had a backlog warning in its baseline; the scorer group rejoin is the waiting stage.
-* Option B: bridge measured in process mode (6.2k-6.6k ev/s, `docs/results/e7-option-b-bridge.md`); thread mode
+* Option B: bridge measured in process mode (6.3k-7.9k ev/s, `docs/results/e7-option-b-bridge.md`); thread mode
   failed to start (pemja library not found, 4 attempts, documented).
 * gRPC bidirectional streaming measured (3 valid runs, p50 9.2 ms); only 100 req/s from one client.
 * `tests/integration/test_feature_parity.py` failed intermittently once in three runs against the live Flink job;

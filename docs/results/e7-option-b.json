@@ -2,11 +2,11 @@
   "users": 2000,
   "mean_gap_s": 600.0,
   "events_timed": 200000,
-  "p50_us": 32.8,
-  "p95_us": 61.9,
-  "p99_us": 96.6,
-  "mean_us": 36.06,
-  "events_per_second_one_core": 27734,
+  "p50_us": 13.7,
+  "p95_us": 24.9,
+  "p99_us": 62.8,
+  "mean_us": 16.06,
+  "events_per_second_one_core": 62286,
   "buffer_events_median": 145,
   "buffer_events_max": 180
 }

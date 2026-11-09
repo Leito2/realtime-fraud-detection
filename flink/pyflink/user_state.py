@@ -10,7 +10,6 @@ boundary, like the SQL job and ``fraudcore.features.velocity_reference``.
 from __future__ import annotations
 
 from collections import deque
-from itertools import islice
 
 SMALL_TX_AMOUNT = 10.0                                  # pinned to flink/sql/*.sql by tests/test_features
 WINDOWS_S = {"10m": 600, "1h": 3600, "24h": 86400}
@@ -27,6 +26,7 @@ class UserWindows:
         self._sum = dict.fromkeys(WINDOWS_S, 0)                      # micro-units (int)
         self._small = dict.fromkeys(WINDOWS_S, 0)
         self._dropped = 0                                            # events already popped from the left
+        self._peak = {name: deque() for name in WINDOWS_S}          # decreasing amounts: front is the max
         self._last_ts = float("-inf")
 
     def size(self) -> int:
@@ -40,6 +40,12 @@ class UserWindows:
         units = round(amount * _UNITS)
         self._events.append((ts, amount))
         for name, span in WINDOWS_S.items():
+            peak = self._peak[name]
+            while peak and peak[-1][1] <= amount:                    # a later, larger payment hides these
+                peak.pop()
+            peak.append((ts, amount))
+            while peak[0][0] < ts - span:                            # the front left the window
+                peak.popleft()
             self._cnt[name] += 1
             self._sum[name] += units
             self._small[name] += amount < SMALL_TX_AMOUNT
@@ -64,6 +70,5 @@ class UserWindows:
             row[f"f_cnt_{name}"] = self._cnt[name]
             row[f"f_sum_{name}"] = self._sum[name] / _UNITS
             row[f"f_small_tx_cnt_{name}"] = self._small[name]
-            lo = self._start[name] - self._dropped
-            row[f"f_max_{name}"] = float(max(a for _, a in islice(self._events, lo, None)))
+            row[f"f_max_{name}"] = float(self._peak[name][0][1])
         return row

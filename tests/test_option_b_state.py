@@ -73,3 +73,15 @@ def test_running_sums_are_exact_after_many_expiries():
             live.popleft()
         got = w.add(ts, amount)
         assert got["f_sum_1h"] == round(math.fsum(a for _, a in live), 2)   # cents-exact, no drift
+
+
+def test_max_in_every_window_matches_brute_force():
+    rnd = random.Random(11)
+    w, seen, ts = user_state.UserWindows(), [], 0.0
+    for _ in range(4000):
+        ts += rnd.uniform(5, 400)
+        amount = round(rnd.uniform(0.01, 500), 2)
+        seen.append((ts, amount))
+        got = w.add(ts, amount)
+        for name, span in user_state.WINDOWS_S.items():
+            assert got[f"f_max_{name}"] == max(a for t, a in seen if t >= ts - span)
