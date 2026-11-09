@@ -193,15 +193,20 @@ async def run_grpc_stream(target: str, pool: list[dict], rate: float, duration_s
             async for response in call:
                 sizes.setdefault("response_bytes", response.ByteSize())
                 i = await order.get()
-                pending.pop(i).set_result(None)
+                future = pending.pop(i)
+                if not future.done():                  # a response after the client's deadline is still read
+                    future.set_result(None)
 
         reader_task = asyncio.create_task(reader())
+
+        write_lock = asyncio.Lock()                    # grpc.aio allows one pending write per call
 
         async def send(i: int) -> None:
             future = asyncio.get_running_loop().create_future()
             pending[i] = future
-            order.put_nowait(i)
-            await call.write(requests[i % len(requests)])
+            async with write_lock:                      # request order == response order on one stream
+                order.put_nowait(i)
+                await call.write(requests[i % len(requests)])
             await asyncio.wait_for(future, deadline_s)
 
         samples = await open_loop(rate, duration_s, send)

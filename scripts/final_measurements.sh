@@ -26,8 +26,8 @@ for s in "${steps[@]}"; do
     e3)  PYTHONUNBUFFERED=1 uv run python scripts/e3_buffer_timeout.py >> $LOG 2>&1 ;;
     e1)  PYTHONUNBUFFERED=1 make bench BENCH_ARGS="--rates 100 200 300 400 500 600" >> $LOG 2>&1 ;;
     e2)  PYTHONUNBUFFERED=1 uv run python -m fraud_bench.run e2 --rate 200 >> $LOG 2>&1 ;;
-    e9)  PYTHONUNBUFFERED=1 uv run python scripts/e9_tracing.py >> $LOG 2>&1 ;;
-    e8)  PYTHONUNBUFFERED=1 uv run python scripts/e8_shadow.py >> $LOG 2>&1 ;;
+    e9)  PYTHONUNBUFFERED=1 uv run python scripts/e9_tracing.py --rate 200 >> $LOG 2>&1 ;;
+    e8)  PYTHONUNBUFFERED=1 uv run python scripts/e8_shadow.py --rate 200 >> $LOG 2>&1 ;;
     e11)
       docker compose --profile core --profile grpc up -d scoring-grpc api >> $LOG 2>&1
       sleep 60

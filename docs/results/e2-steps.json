@@ -1,0 +1,578 @@
+[
+  {
+    "rate": 200,
+    "rep": 1,
+    "sent": 12000,
+    "decided": 12000,
+    "lost": 0,
+    "p50": 10.863,
+    "p95": 73.919,
+    "p99": 154.879,
+    "max": 224.895,
+    "gen_valid": true,
+    "gen_lag_p99_ms": 0.482,
+    "delivery_errors": 0,
+    "lag_stable": true,
+    "lag_max": 38,
+    "dlq_growth": 0,
+    "lag_samples": [
+      [
+        2.0,
+        0
+      ],
+      [
+        4.0460000000020955,
+        2
+      ],
+      [
+        6.062000000005355,
+        3
+      ],
+      [
+        8.10899999999674,
+        2
+      ],
+      [
+        10.125,
+        3
+      ],
+      [
+        12.171000000002095,
+        5
+      ],
+      [
+        14.202999999994063,
+        3
+      ],
+      [
+        16.21799999999348,
+        2
+      ],
+      [
+        18.25,
+        4
+      ],
+      [
+        20.281000000002678,
+        2
+      ],
+      [
+        22.312000000005355,
+        5
+      ],
+      [
+        24.327999999994063,
+        38
+      ],
+      [
+        26.406000000002678,
+        2
+      ],
+      [
+        28.437000000005355,
+        5
+      ],
+      [
+        30.46799999999348,
+        2
+      ],
+      [
+        32.5,
+        30
+      ],
+      [
+        34.53100000000268,
+        2
+      ],
+      [
+        36.546000000002095,
+        3
+      ],
+      [
+        38.57799999999406,
+        11
+      ],
+      [
+        40.625,
+        7
+      ],
+      [
+        42.65600000000268,
+        5
+      ],
+      [
+        44.687000000005355,
+        2
+      ],
+      [
+        46.70299999999406,
+        2
+      ],
+      [
+        48.73399999999674,
+        12
+      ],
+      [
+        50.75,
+        1
+      ],
+      [
+        52.78100000000268,
+        3
+      ],
+      [
+        54.796000000002095,
+        2
+      ],
+      [
+        56.84299999999348,
+        2
+      ],
+      [
+        58.875,
+        2
+      ],
+      [
+        60.88999999999942,
+        1
+      ],
+      [
+        62.90600000000268,
+        0
+      ]
+    ],
+    "docker_stats": "realtime-fraud-detection-generator-run-9d920ee9ee7c\t100.2MiB / 1GiB\t10.57%\nrealtime-fraud-detection-latency-run-f9a67e883842\t19.16MiB / 200MiB\t5.47%\nrealtime-fraud-detection-scorer-1\t122.2MiB / 300MiB\t41.56%\nrealtime-fraud-detection-feature-writer-1\t42.99MiB / 150MiB\t6.03%\nrealtime-fraud-detection-kafka-1\t584.2MiB / 850MiB\t88.33%\nrealtime-fraud-detection-taskmanager-1\t653MiB / 1.221GiB\t33.28%\nrealtime-fraud-detection-jobmanager-1\t428.8MiB / 850MiB\t1.12%\nrealtime-fraud-detection-redis-1\t41MiB / 200MiB\t3.16%\nrealtime-fraud-detection-prometheus-1\t95.59MiB / 350MiB\t0.08%\nrealtime-fraud-detection-kafka-exporter-1\t12.04MiB / 64MiB\t0.00%\nrealtime-fraud-detection-redis-exporter-1\t8.648MiB / 48MiB\t0.00%\nrealtime-fraud-detection-mlflow-1\t370.1MiB / 500MiB\t0.15%\n",
+    "batch_max_messages": 1,
+    "batch_max_wait_ms": 1
+  },
+  {
+    "rate": 200,
+    "rep": 1,
+    "sent": 12000,
+    "decided": 12000,
+    "lost": 0,
+    "p50": 15.639,
+    "p95": 80.639,
+    "p99": 351.743,
+    "max": 643.071,
+    "gen_valid": false,
+    "gen_lag_p99_ms": 7.406,
+    "delivery_errors": 0,
+    "lag_stable": true,
+    "lag_max": 8,
+    "dlq_growth": 0,
+    "lag_samples": [
+      [
+        2.0160000000032596,
+        0
+      ],
+      [
+        4.047000000005937,
+        2
+      ],
+      [
+        6.063000000009197,
+        1
+      ],
+      [
+        8.078000000008615,
+        4
+      ],
+      [
+        10.110000000000582,
+        8
+      ],
+      [
+        12.14100000000326,
+        1
+      ],
+      [
+        14.14100000000326,
+        3
+      ],
+      [
+        16.172000000005937,
+        1
+      ],
+      [
+        18.203000000008615,
+        4
+      ],
+      [
+        20.235000000000582,
+        4
+      ],
+      [
+        22.26600000000326,
+        4
+      ],
+      [
+        24.297000000005937,
+        5
+      ],
+      [
+        26.328000000008615,
+        5
+      ],
+      [
+        28.360000000000582,
+        4
+      ],
+      [
+        30.39100000000326,
+        4
+      ],
+      [
+        32.42200000000594,
+        3
+      ],
+      [
+        34.453000000008615,
+        6
+      ],
+      [
+        36.469000000011874,
+        3
+      ],
+      [
+        38.48500000000058,
+        4
+      ],
+      [
+        40.51600000000326,
+        4
+      ],
+      [
+        42.5630000000092,
+        1
+      ],
+      [
+        44.578000000008615,
+        0
+      ],
+      [
+        46.61000000000058,
+        7
+      ],
+      [
+        48.65700000000652,
+        6
+      ],
+      [
+        50.67200000000594,
+        4
+      ],
+      [
+        52.703000000008615,
+        2
+      ],
+      [
+        54.719000000011874,
+        6
+      ],
+      [
+        56.76600000000326,
+        3
+      ],
+      [
+        58.8130000000092,
+        4
+      ],
+      [
+        60.828000000008615,
+        3
+      ],
+      [
+        62.844000000011874,
+        0
+      ]
+    ],
+    "docker_stats": "realtime-fraud-detection-generator-run-130f1e43f181\t99.57MiB / 1GiB\t11.51%\nrealtime-fraud-detection-latency-run-c67aea3f2090\t17.77MiB / 200MiB\t5.02%\nrealtime-fraud-detection-scorer-1\t122.9MiB / 300MiB\t28.47%\nrealtime-fraud-detection-feature-writer-1\t43.68MiB / 150MiB\t6.52%\nrealtime-fraud-detection-kafka-1\t583MiB / 850MiB\t68.80%\nrealtime-fraud-detection-taskmanager-1\t677.7MiB / 1.221GiB\t36.72%\nrealtime-fraud-detection-jobmanager-1\t427.1MiB / 850MiB\t6.46%\nrealtime-fraud-detection-redis-1\t40.27MiB / 200MiB\t2.19%\nrealtime-fraud-detection-prometheus-1\t83.38MiB / 350MiB\t0.75%\nrealtime-fraud-detection-kafka-exporter-1\t11.59MiB / 64MiB\t9.04%\nrealtime-fraud-detection-redis-exporter-1\t8.551MiB / 48MiB\t2.08%\nrealtime-fraud-detection-mlflow-1\t370.1MiB / 500MiB\t0.16%\n",
+    "batch_max_messages": 50,
+    "batch_max_wait_ms": 5
+  },
+  {
+    "rate": 200,
+    "rep": 1,
+    "sent": 12000,
+    "decided": 12000,
+    "lost": 0,
+    "p50": 15.927,
+    "p95": 32.927,
+    "p99": 71.935,
+    "max": 162.943,
+    "gen_valid": true,
+    "gen_lag_p99_ms": 0.756,
+    "delivery_errors": 0,
+    "lag_stable": true,
+    "lag_max": 6,
+    "dlq_growth": 0,
+    "lag_samples": [
+      [
+        2.014999999999418,
+        0
+      ],
+      [
+        4.046999999991385,
+        5
+      ],
+      [
+        6.077999999994063,
+        3
+      ],
+      [
+        8.10899999999674,
+        3
+      ],
+      [
+        10.125,
+        6
+      ],
+      [
+        12.171999999991385,
+        5
+      ],
+      [
+        14.202999999994063,
+        4
+      ],
+      [
+        16.218999999997322,
+        1
+      ],
+      [
+        18.25,
+        5
+      ],
+      [
+        20.281000000002678,
+        3
+      ],
+      [
+        22.311999999990803,
+        3
+      ],
+      [
+        24.327999999994063,
+        4
+      ],
+      [
+        26.35899999999674,
+        3
+      ],
+      [
+        28.389999999999418,
+        3
+      ],
+      [
+        30.406000000002678,
+        1
+      ],
+      [
+        32.4369999999908,
+        2
+      ],
+      [
+        34.46899999999732,
+        3
+      ],
+      [
+        36.48399999999674,
+        2
+      ],
+      [
+        38.51499999999942,
+        2
+      ],
+      [
+        40.53100000000268,
+        5
+      ],
+      [
+        42.5619999999908,
+        1
+      ],
+      [
+        44.59399999999732,
+        4
+      ],
+      [
+        46.671999999991385,
+        3
+      ],
+      [
+        48.6869999999908,
+        2
+      ],
+      [
+        50.71899999999732,
+        4
+      ],
+      [
+        52.73399999999674,
+        3
+      ],
+      [
+        54.76499999999942,
+        3
+      ],
+      [
+        56.78100000000268,
+        4
+      ],
+      [
+        58.796999999991385,
+        4
+      ],
+      [
+        60.82799999999406,
+        2
+      ]
+    ],
+    "docker_stats": "realtime-fraud-detection-generator-run-1a6c9814b6a3\t99.5MiB / 1GiB\t10.75%\nrealtime-fraud-detection-latency-run-2661c063ae25\t18.11MiB / 200MiB\t4.35%\nrealtime-fraud-detection-scorer-1\t122.8MiB / 300MiB\t25.51%\nrealtime-fraud-detection-feature-writer-1\t43.18MiB / 150MiB\t6.11%\nrealtime-fraud-detection-kafka-1\t576.5MiB / 850MiB\t91.10%\nrealtime-fraud-detection-taskmanager-1\t698.9MiB / 1.221GiB\t35.24%\nrealtime-fraud-detection-jobmanager-1\t429.8MiB / 850MiB\t0.83%\nrealtime-fraud-detection-redis-1\t39.96MiB / 200MiB\t1.82%\nrealtime-fraud-detection-prometheus-1\t82.75MiB / 350MiB\t0.16%\nrealtime-fraud-detection-kafka-exporter-1\t11.98MiB / 64MiB\t0.00%\nrealtime-fraud-detection-redis-exporter-1\t10.43MiB / 48MiB\t0.00%\nrealtime-fraud-detection-mlflow-1\t369.7MiB / 500MiB\t0.14%\n",
+    "batch_max_messages": 500,
+    "batch_max_wait_ms": 5
+  },
+  {
+    "rate": 200,
+    "rep": 1,
+    "sent": 12000,
+    "decided": 12000,
+    "lost": 0,
+    "p50": 25.919,
+    "p95": 43.935,
+    "p99": 83.967,
+    "max": 182.015,
+    "gen_valid": true,
+    "gen_lag_p99_ms": 0.362,
+    "delivery_errors": 0,
+    "lag_stable": true,
+    "lag_max": 13,
+    "dlq_growth": 0,
+    "lag_samples": [
+      [
+        2.0,
+        0
+      ],
+      [
+        4.0310000000026776,
+        7
+      ],
+      [
+        6.062000000005355,
+        11
+      ],
+      [
+        8.078000000008615,
+        2
+      ],
+      [
+        10.10899999999674,
+        5
+      ],
+      [
+        12.14100000000326,
+        4
+      ],
+      [
+        14.172000000005937,
+        1
+      ],
+      [
+        16.187000000005355,
+        7
+      ],
+      [
+        18.218999999997322,
+        8
+      ],
+      [
+        20.25,
+        5
+      ],
+      [
+        22.281000000002678,
+        7
+      ],
+      [
+        24.297000000005937,
+        8
+      ],
+      [
+        26.328000000008615,
+        6
+      ],
+      [
+        28.343999999997322,
+        5
+      ],
+      [
+        30.375,
+        5
+      ],
+      [
+        32.40600000000268,
+        5
+      ],
+      [
+        34.42200000000594,
+        7
+      ],
+      [
+        36.453000000008615,
+        7
+      ],
+      [
+        38.46899999999732,
+        5
+      ],
+      [
+        40.5,
+        8
+      ],
+      [
+        42.53100000000268,
+        13
+      ],
+      [
+        44.60899999999674,
+        6
+      ],
+      [
+        46.64100000000326,
+        3
+      ],
+      [
+        48.67200000000594,
+        7
+      ],
+      [
+        50.703000000008615,
+        3
+      ],
+      [
+        52.73399999999674,
+        5
+      ],
+      [
+        54.76600000000326,
+        4
+      ],
+      [
+        56.78100000000268,
+        6
+      ],
+      [
+        58.812000000005355,
+        2
+      ],
+      [
+        60.84399999999732,
+        7
+      ]
+    ],
+    "docker_stats": "realtime-fraud-detection-generator-run-1bd29a4d35b1\t99.7MiB / 1GiB\t10.44%\nrealtime-fraud-detection-latency-run-598add2f14cc\t17.47MiB / 200MiB\t3.05%\nrealtime-fraud-detection-scorer-1\t123MiB / 300MiB\t13.21%\nrealtime-fraud-detection-feature-writer-1\t43.16MiB / 150MiB\t5.82%\nrealtime-fraud-detection-kafka-1\t551.8MiB / 850MiB\t48.87%\nrealtime-fraud-detection-taskmanager-1\t729.9MiB / 1.221GiB\t33.88%\nrealtime-fraud-detection-jobmanager-1\t430.7MiB / 850MiB\t0.80%\nrealtime-fraud-detection-redis-1\t40.23MiB / 200MiB\t1.02%\nrealtime-fraud-detection-prometheus-1\t80.11MiB / 350MiB\t0.84%\nrealtime-fraud-detection-kafka-exporter-1\t13.13MiB / 64MiB\t0.00%\nrealtime-fraud-detection-redis-exporter-1\t9.973MiB / 48MiB\t0.00%\nrealtime-fraud-detection-mlflow-1\t369.7MiB / 500MiB\t0.17%\n",
+    "batch_max_messages": 500,
+    "batch_max_wait_ms": 20
+  }
+]
