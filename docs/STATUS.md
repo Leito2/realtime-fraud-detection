@@ -23,7 +23,7 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 * Exactly-once: 0 duplicates after killing the TaskManager (1539 at-least-once); p95 25 ms -> 1.1 s (checkpoint 1 s).
 
 ## Open (nothing here blocks the rest)
-* **Blocked outside the repo:** IEEE-CIS needs a Kaggle download with account credentials.
+* IEEE-CIS done offline (XGBoost PR-AUC 0.4723, recall@1%FPR 0.3925; `docs/results/ieee-cis-benchmark.md`). Nothing is blocked outside the repo.
 * F5 closed: about 41 s of silence on a clean baseline (two clean reruns plus two isolation runs of 37-44 s); the 79.9 s run had a backlog warning in its baseline; the scorer group rejoin is the waiting stage.
 * Option B: bridge measured in process mode (6.3k-7.9k ev/s, `docs/results/e7-option-b-bridge.md`); thread mode
   failed to start (pemja library not found, 4 attempts, documented).

@@ -327,6 +327,20 @@ End to end (scorer on ONNX in-process vs as a Triton client; quiet machine, 2 re
 | triton | 400 | 1 | 28.207 | 152.319 | 355.839 | 0 | True |
 | triton | 400 | 2 | 32.511 | 204.543 | 400.639 | 0 | True |
 
+**IEEE-CIS (offline, not served).** The same training code and metrics on the public IEEE-CIS Fraud Detection dataset
+(590,540 transactions, 391 features, 3.50% fraud), temporal split by `TransactionDT` (354,324 train / 118,108 valid /
+118,108 test). Untuned, one run, `train_transaction.csv` only. Recall is at the cutoff that flags 1% of legitimate
+payments ([`docs/results/ieee-cis-benchmark.md`](docs/results/ieee-cis-benchmark.md), `uv run python -m fraud_training.ieee_cis`).
+
+| model | PR-AUC | recall at 1% FPR |
+|---|---|---|
+| rule: amount only | 0.0365 | 0.0079 |
+| XGBoost | 0.4723 | 0.3925 |
+| LightGBM | 0.25 | 0.2306 |
+
+XGBoost beats the one-feature rule by 13x in PR-AUC on real data, so the method holds outside the generator. LightGBM
+with the shared default parameters is clearly worse here; no tuning was attempted, so no claim is made about why.
+
 **E5 - what exactly-once costs** (`make e5`; ADR-4). Same load, Flink sink at-least-once vs transactional. A row
 becomes visible when its checkpoint commits, so the checkpoint interval is the latency floor.
 
@@ -534,7 +548,7 @@ The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 * **gRPC streaming** was only measured at 100 req/s from one Python client; higher rates were not driven (E11).
 * **F5:** the silence after a broker restart is about 41 s on a clean baseline (20 s down plus about 21 s of restart and rejoin; the scorer group is the stage that waits, Flink resumes at once, [isolation](docs/results/f5-isolate.md)); a loaded host or a leftover backlog stretches it to 80-130 s. **F1:** the Flink restart takes 39 s, not the 30 s hypothesized.
 * **Option B** (PyFlink keyed operator): correct and cheap in plain Python (16 us/event). Through PyFlink's process-mode bridge it runs at 6.3k-7.9k ev/s per slot (upper bound: Flink keyed state not included) ([E7 bridge](docs/results/e7-option-b-bridge.md)); thread mode would not start (pemja native library not found, 4 attempts). Not adopted: the cost is a second runtime in the Flink image, not throughput.
-* **No real data.** Everything runs on a synthetic generator; IEEE-CIS was not used (it needs a Kaggle download with account credentials).
+* **Real data only offline.** The served system runs on a synthetic generator. The same training code was also run once on the public IEEE-CIS dataset (offline table, below); it was not streamed through Kafka and the model was not tuned there.
 * The shadow challenger is isolated logically, not physically: it shares the CPU with the champion (E8).
 
 ### Lessons

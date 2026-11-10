@@ -1,0 +1,24 @@
+{
+  "rows": 590540,
+  "features": 391,
+  "fraud_rate": 0.035,
+  "train_rows": 354324,
+  "valid_rows": 118108,
+  "test_rows": 118108,
+  "test_fraud_rate": 0.0344,
+  "amount_rule": {
+    "pr_auc": 0.0365,
+    "recall_at_1pct_fpr": 0.0079,
+    "cutoff_at_1pct_fpr": 1224.0
+  },
+  "xgboost": {
+    "pr_auc": 0.4723,
+    "recall_at_1pct_fpr": 0.3925,
+    "cutoff_at_1pct_fpr": 0.8102
+  },
+  "lightgbm": {
+    "pr_auc": 0.25,
+    "recall_at_1pct_fpr": 0.2306,
+    "cutoff_at_1pct_fpr": 0.3637
+  }
+}
