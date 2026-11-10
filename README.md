@@ -583,7 +583,7 @@ Three results are worth reading as numbers rather than verdicts:
 * **At-least-once vs exactly-once (F1 vs F10, E5).** Killing the TaskManager produced 1539 duplicate decisions with
   the default sink and 0 with a transactional sink. The price is latency, because a row becomes visible only when its
   checkpoint commits: at 200 ev/s the p95 is 25 ms at-least-once and 1.1 s, 5.8 s and 10.0 s with a checkpoint every 1,
-  5 and 10 s (E5, table below). The duplicates are harmless here because the scorer dedupes by `payment_id` (ADR-4),
+  5 and 10 s (E5, table below). The duplicates are harmless here because downstream consumers dedupe by `payment_id` (the auditor inserts with `ON CONFLICT DO NOTHING`, ADR-4),
   which is why at-least-once stays the default.
 * **A dead consumer is noticed after `session.timeout.ms` (F2).** With librdkafka's default of 45 s the surviving
   scorer was silent for 48 s; with 10 s it takes over in 12 s (ADR-0015). The cost is a false rebalance when a
@@ -639,8 +639,8 @@ The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 * Benchmark harnesses have bugs too: a collector idle timeout shorter than the checkpoint gap produced fake losses, and an asyncio write race made a gRPC client report 100% errors.
 
 ### CV phrase (measured numbers only)
-* **Real-time fraud scoring pipeline** (Kafka -> Flink SQL windowed features -> Redis online store -> XGBoost on ONNX Runtime) that sustains **200 events/s at p95 38.6 ms end to end** on a single 8 GB laptop, measured open loop with three repetitions per step; the bottleneck was identified as the Flink TaskManager (100-131% of a core at 300-400 ev/s while the scorer stayed near 30%).
-* **Model serving and lifecycle:** XGBoost on ONNX Runtime is 22x faster than the native booster per call at batch 1 (0.021 vs 0.468 ms; parity 1.2e-7 against Triton); it beats a rules baseline at **0.674 vs 0.260 recall at 1% FPR** (PR-AUC 0.590 vs 0.164); the champion hot-swaps through the MLflow registry, and a challenger in shadow mode costs 0.5-4 ms of champion p50 on this hardware.
+* **Real-time fraud scoring pipeline** (Kafka -> Flink SQL windowed features -> Redis online store -> XGBoost on ONNX Runtime) that sustains **200 events/s at p95 38.6 ms end to end** on a single 8 GB laptop, measured open loop with three repetitions per step; the bottleneck was identified as the Flink TaskManager (115-121% of a core at 300-400 ev/s in the final run while the scorer stayed at 23-29%).
+* **Model serving and lifecycle:** XGBoost on ONNX Runtime is 22x faster than the native booster per call at batch 1 (0.021 vs 0.468 ms; parity 1.2e-7 against Triton); it beats a rules baseline at **0.674 vs 0.260 recall at 1% FPR** (PR-AUC 0.590 vs 0.164); the champion hot-swaps through the MLflow registry, and a challenger in shadow mode costs 0.4-5.5 ms of champion p50 on this hardware (E8).
 * **Contract-first gRPC scoring API** benchmarked against REST/JSON on the same model: **p99 8.6 ms vs 12.3 ms**, p50 3.5 vs 5.4 ms at 100 req/s (final measurement block, valid repetitions).
 * **Reliability:** 11 failure experiments (plus a control) with written hypotheses and 0 lost events in all of them; exactly-once recovery from a killed Flink TaskManager in 26 s with 0 duplicates (1539 with at-least-once), at a latency cost measured in E5; two hypotheses refuted and published with their real numbers.
 
