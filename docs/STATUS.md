@@ -38,3 +38,7 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 ## How to resume
 `docker compose --profile core --profile ops --profile grpc up -d` (never `down`/`-v`); `make test`; `make lint`.
 Measurements: `scripts/final_measurements.sh` (leaves dashboards and async scorers stopped).
+
+## Closed by decision
+* E9: the final-block rerun was invalid (9 of 9 runs); the earlier valid measurement stays. No further runs requested.
+* Bottleneck (Flink TaskManager, 115-121% of a core at 300-400 ev/s in the final E1 run) is accepted as measured; the alternatives (more Flink parallelism, cheaper per-event work, Avro/Protobuf, another engine) are listed as future work, not measured.

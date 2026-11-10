@@ -370,9 +370,9 @@ protocol (kept in `docs/results/e1-report-first-run.md`) gave: 100 ev/s p95 22.9
 **Sustained throughput: 200 ev/s at p95 38.6 ms in both runs.** 300 ev/s is borderline: the median p95 was 64 ms in the
 final run (one repetition at 413 ms) and 81 ms in the earlier one, so it passed the 80 ms rule once and missed it once.
 The 100 ev/s step of the final run failed the generator-validity rule (a load-generator hiccup, p95 range 20-476 ms), not
-the pipeline. From 400 ev/s the queues grow without bound in both runs. In the earlier run the container CPU at 300-400
-ev/s showed where (not re-checked in the final run): the Flink TaskManager sits at 100-131% of a core while the scorer stays near 30% and Redis
-under 3%, so **the bottleneck is the Flink job (one TaskManager on this laptop), not the scorer or the feature store**.
+the pipeline. From 400 ev/s the queues grow without bound in both runs. The container CPU shows where, in both runs. Final run (mean of the samples per step): at 200 ev/s the TaskManager is at 44% of a core;
+at 300 ev/s 115% (max 175%) against 23% for the scorer; at 400 ev/s 121% against 29% for the scorer, with Kafka also busy
+(124% mean at 400 ev/s). The earlier run read 100-131% for the TaskManager and under 3% for Redis. So **the bottleneck is the Flink job (one TaskManager on this laptop), not the scorer or the feature store**.
 The M1 smoke (500 ev/s, p95 96 ms, placeholder scorer) is an earlier measurement; 500 ev/s does not fit the budget in this run (p95 17 s, generator lag invalid).
 The `[X]k events/s` of the headline is therefore not reachable on this hardware, and this section is the real number.
 
