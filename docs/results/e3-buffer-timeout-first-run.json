@@ -1,0 +1,46 @@
+{
+  "rate": 200,
+  "duration_s": 20,
+  "rows": [
+    {
+      "buffer_timeout": "100 ms",
+      "count": 4000,
+      "p50": 77.823,
+      "p95": 256.895,
+      "p99": 569.855,
+      "max": 677.887,
+      "gen_lag_p99_ms": 3.418,
+      "valid": true
+    },
+    {
+      "buffer_timeout": "10 ms",
+      "count": 4000,
+      "p50": 22.591,
+      "p95": 108.607,
+      "p99": 223.615,
+      "max": 389.631,
+      "gen_lag_p99_ms": 3.056,
+      "valid": true
+    },
+    {
+      "buffer_timeout": "5 ms",
+      "count": 4000,
+      "p50": 20.383,
+      "p95": 66.431,
+      "p99": 102.399,
+      "max": 203.391,
+      "gen_lag_p99_ms": 3.166,
+      "valid": true
+    },
+    {
+      "buffer_timeout": "1 ms",
+      "count": 4000,
+      "p50": 19.279,
+      "p95": 111.295,
+      "p99": 172.287,
+      "max": 250.367,
+      "gen_lag_p99_ms": 4.55,
+      "valid": true
+    }
+  ]
+}

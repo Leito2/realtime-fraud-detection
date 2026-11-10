@@ -11,11 +11,11 @@ Every number is a measurement from `docs/results/` on one 8 GB Windows laptop (W
 
 | | Result | Where |
 |---|---|---|
-| Sustained throughput | **200 ev/s at p95 38.6 ms** (300 ev/s: p95 81 ms, over the 80 ms budget); bottleneck: Flink TaskManager CPU | [E1](#e1---how-much-does-this-laptop-sustain-make-bench) |
+| Sustained throughput | **200 ev/s at p95 38.6 ms** (300 ev/s: p95 64 ms in the final run, 81 ms in an earlier one: borderline); bottleneck: Flink TaskManager CPU | [E1](#e1---how-much-does-this-laptop-sustain-make-bench) |
 | Model vs rules | PR-AUC 0.590 vs 0.164, recall at 1% FPR 0.674 vs 0.260 | [Rules vs models](#rules-vs-models-test-days-never-seen-in-training) |
 | ONNX vs native XGBoost | 0.021 ms vs 0.468 ms per call at batch 1 (22x); parity ONNX-Triton 1.2e-7; Triton adds about 0.7-0.9 ms | [E4](#serving-guarantees-windows-and-scaling-e4-e7-e10) |
 | Longer windows | `slow_fraud` recall 1.1% -> 21.1% with 1 h / 24 h features | E7 |
-| gRPC vs REST | p50 4.1 vs 6.3 ms, p99 8.7-10.8 vs 15.4 ms at 100 req/s (stream: p50 9.2 ms, slower than unary) | [E11](#scorer-batching-shadow-tracing-and-the-api-e2-e8-e9-e11) |
+| gRPC vs REST | p50 3.5 vs 5.4 ms, p99 8.6 vs 12.3 ms at 100 req/s (stream: p50 8.3 ms, slower than unary) | [E11](#scorer-batching-shadow-tracing-and-the-api-e2-e8-e9-e11) |
 | Exactly-once | 0 duplicates after killing the TaskManager (1539 with at-least-once); p95 25 ms -> 1.1 s | [E5, F10](#resilience-what-happens-when-things-break-f0-f10) |
 | Failure experiments | 11 fault experiments plus a control: 10 of the 11 confirmed; F1 (39 s restart) refuted; 0 events lost in all | [F0-F10](#resilience-what-happens-when-things-break-f0-f10) |
 | Shadow challenger | not free here: p50 +0.4-5.5 ms with the shadow on (E8) | E8 |
@@ -30,12 +30,19 @@ Event logs and partitions · per-event vs micro-batch processing · event vs pro
 delivery guarantees · online vs offline features and train/serve skew · tail latency and coordinated omission ·
 champion/challenger, shadow mode, drift
 ### Key technologies at a glance
-- **Kafka** — durable log that carries every payment event.
-- **Flink** — computes each user's recent behaviour in real time.
-- **Redis** — serves user features in under a millisecond.
-- **XGBoost + ONNX Runtime** — fast, explainable scoring on CPU.
-- **gRPC** — low-latency service-to-service scoring API, used when a checkout needs an answer right away.
-- **Shadow mode and drift monitoring** — new models are tested on real traffic before they replace the current one.
+Chosen, and each one measured or tested somewhere in Part IV (why each was chosen over its alternatives: section 5).
+- **Kafka** — durable log that carries every payment event (one broker, topics keyed by `user_id`).
+- **Flink SQL** — computes each user's recent behaviour with per-event `OVER` windows.
+- **Redis** — serves the slow-changing user profile in one round trip per micro-batch.
+- **XGBoost + ONNX Runtime** — fast, explainable scoring on CPU (LightGBM and a PyTorch challenger compared; native XGBoost and Triton measured as serving alternatives).
+- **gRPC + REST** — synchronous scoring API for a checkout that needs an answer right away (benchmarked against each other, E11).
+- **MLflow** — model registry with a `champion` alias; the scorer hot-swaps models without losing events.
+- **Shadow mode, Evidently and Postgres** — challengers run on real traffic in their own consumer group; the audit store joins decisions with labels; drift is detected with Evidently.
+- **SeaweedFS (S3 API)** — versioned data lake for backtests.
+- **SHAP + an LLM that only phrases facts** — explanations that cannot invent causes (`mock`/`ollama`, $0).
+- **Prometheus, Grafana, OpenTelemetry/Tempo** — metrics, dashboards, optional tracing.
+- **Toxiproxy and the `chaos` framework** — fault injection with a written hypothesis per experiment.
+- **Python 3.12, uv, Polars, pydantic** — one workspace; `fraudcore` is the shared contract for training and serving.
 ### 3. What This Project Demonstrates
 ### 4. Architecture
 
@@ -60,14 +67,28 @@ definitions, event contracts, thresholds). Training and serving import the same 
 train/serve skew is prevented by construction. Full reasoning:
 [ADR-0002](docs/adr/0002-code-organization-clean-architecture.md).
 
-#### The pipeline today (M1)
+#### The final pipeline
+Two paths with different rules. The **critical path** has a p95 budget of 80 ms and nothing slow is allowed on it;
+the **async path** may be slow or down without changing a single decision.
 ```
-generator ──payments──► Flink SQL (10-min OVER window) ──payments-enriched──► scorer ──decisions──► latency collector
- open-loop      key=user_id     one row per payment, current one included      micro-batches         percentiles
+CRITICAL PATH
+generator ──payments──► Flink SQL ──payments-enriched──► scorer ──decisions──► latency collector
+ open-loop   key=user_id  10-min OVER window,             micro-batches, ONNX,     percentiles
+                          current payment included        profile from Redis
+                                                              ▲
+ profile builder (batch, 30 days) ──────────► Redis ──────────┘
+
+ASYNC PATH (each its own consumer group)
+decisions + shadow-scores + labels ──► auditor ──► Postgres (audit store, drift, promotion criteria)
+payments-enriched ──► shadow scorer (challenger) ──► shadow-scores
+decisions ──► explainer (SHAP facts -> LLM wording -> gate) ;  feature writer ──► Redis (state for the sync path)
+
+SYNCHRONOUS ENTRYPOINTS (same ScoreSync use case): gRPC Score / ScoreStream and REST POST /score
+MODEL LIFECYCLE: training ──► MLflow registry (champion alias, thresholds, score reference) ──► scorer hot swap
 ```
 A payment is scheduled at a fixed time (`t_scheduled_ns`), whatever the system is doing. Latency is the
 broker timestamp of its decision minus that scheduled time, so a slow system cannot hide its own delay
-(*coordinated omission*). The scorer is a placeholder rule for now; the real model arrives in M3.
+(*coordinated omission*).
 
 #### Features: computed twice, checked against each other
 Fraud shows in recent behaviour, so each payment is enriched with its user's last 10 minutes: how many payments,
@@ -89,20 +110,73 @@ see E1), 20 s per value after a warm-up, one run per value, nothing else running
 
 | buffer-timeout | p50 (ms) | p95 (ms) | p99 (ms) |
 |---|---|---|---|
-| 100 ms | 78 | 257 | 570 |
-| 10 ms | 23 | 109 | 224 |
-| 5 ms | 20 | 66 | 102 |
-| 1 ms | 19 | 111 | 172 |
+| 100 ms | 65 | 111 | 130 |
+| 10 ms | 18 | 30 | 70 |
+| 5 ms | 14 | 22 | 29 |
+| 1 ms | 15 | 37 | 239 |
 
-The default (100 ms) puts the median at about 4x the one with a 1-10 ms timeout. Between 1, 5 and 10 ms the p50 is
-within 3 ms and the p95 differences (66-111 ms) are run-to-run noise at this single repetition, so the data does not
+(Final measurement block, quiet machine; an earlier sweep gave 78 / 23 / 20 / 19 ms of p50, same ranking.) The
+default (100 ms) puts the median at about 4x the one with a 1-10 ms timeout. Between 1, 5 and 10 ms the p50 is
+within 4 ms and the p95 differences (22-37 ms) are run-to-run noise at this single repetition, so the data does not
 say which of the three is best, only that the default is the expensive choice. An earlier sweep at 500 ev/s is not
 used: that rate is above what this machine sustains, so every row was queueing.
 
 ### 5. Design Decisions (ADRs)
+Only the decisions that had real alternatives. The full text (context, decision, consequences) is in
+[`docs/adr/`](docs/adr/); where a number settled the choice, the experiment is named.
+
+| Decision | Alternatives considered | Why this one | Evidence |
+|---|---|---|---|
+| Features are computed by Flink and travel **inside the event** (`payments-enriched`) | Scorer reads velocity from Redis while Flink writes it | Reading Redis races with the write (the scorer can miss the current payment) and creates train/serve skew; enriched events have no race and an exact offline twin | [ADR-0003](docs/adr/0003-enriched-events-not-redis-lookups.md), parity test |
+| Redis only for the slow **profile**, one pipelined read per micro-batch | Redis for everything; Feast; Dragonfly/Valkey | One round trip per batch; a Redis failure degrades the decision instead of stopping it | [ADR-0004](docs/adr/0004-redis-only-for-the-profile.md), F3, F4 |
+| Flink SQL with **`OVER` windows** | Tumbling windows; Spark Structured Streaming; Kafka Streams; Bytewax/Faust | Tumbling windows add up to 10 min of latency; `OVER` emits per event. Known cost: same-millisecond peers in a burst (option B, a keyed operator, was built and measured but not adopted) | [ADR-0005](docs/adr/0005-over-windows.md), E3, E7 |
+| **At-least-once** + dedupe by `payment_id` on the critical path | Exactly-once transactional sink | Exactly-once makes a row visible only after a checkpoint: p95 25 ms becomes 1.1 s. Both were measured | [ADR-0006](docs/adr/0006-at-least-once-with-idempotency.md), E5, F10 |
+| Labels in their **own topic** | Label inside the payment | No leakage into features or logs, by construction | [ADR-0007](docs/adr/0007-labels-in-their-own-topic.md) |
+| Challenger in **shadow** with its own consumer group | Canary or A/B on live traffic | Sees real traffic and cannot decide anything; not free on one laptop (p50 +0.4-5.5 ms) | [ADR-0008](docs/adr/0008-shadow-has-its-own-consumer-group.md), E8 |
+| **JSON** in v1 | Avro + Schema Registry | One container fewer on 8 GB; Flink SQL reads JSON natively; serialization was never the measured bottleneck | [ADR-0009](docs/adr/0009-json-serialization.md), E1 |
+| **XGBoost** as champion | LightGBM; rules only; a PyTorch challenger | Better PR-AUC on the synthetic data (0.590 vs rules 0.164) and on IEEE-CIS (0.472 vs LightGBM 0.250) | [Why XGBoost](#why-xgboost-and-not-lightgbm), IEEE-CIS |
+| **ONNX Runtime in-process** | Native XGBoost; Triton; a Go scorer | 0.021 ms vs 0.468 ms per call at batch 1 (22x), parity 1e-7; Triton adds a hop and wins nothing with one client | [ADR-0016](docs/adr/0016-triton-as-a-measured-variant.md), E4 |
+| SHAP from the native booster; the LLM **only phrases** the facts | Let the LLM reason; templates only | An LLM that reasons about a payment can invent causes; a gate rejects text that cites anything but the facts | [ADR-0010](docs/adr/0010-shap-from-the-native-booster.md), F8 |
+| A registered model **carries its thresholds** | Thresholds only in config | A hot swap that changes the model but not the cutoffs silently changes business behaviour | [ADR-0011](docs/adr/0011-model-carries-its-thresholds.md) |
+| gRPC/REST rebuild velocity **from stored state** | A second Flink-like window in the API | Same feature semantics, one model implementation; the residual error is reported (exact for 89.1% of payments) | [ADR-0012](docs/adr/0012-sync-velocity-from-stored-state.md), sync-vs-Flink |
+| **gRPC** unary for synchronous scoring | REST/JSON; gRPC streaming | p50 3.5 vs 5.4 ms; the stream is slower (one handler, responses in order) | E11 |
+| **SeaweedFS** behind the S3 API | MinIO | MinIO stopped publishing usable images in 2025; code uses boto3 + a SHA-256 manifest, so the server is replaceable | [ADR-0013](docs/adr/0013-seaweedfs-instead-of-minio.md) |
+| Profile lookup with a **deadline and circuit breaker** | Plain socket timeout | A stopped Redis blocked ~4 s in name resolution, which no socket timeout covers; the breaker bounds it (2.7 s) and keeps p95 at baseline when Redis is slow | [ADR-0014](docs/adr/0014-profile-store-breaker-and-deadline.md), F3, F4 |
+| Every consumer under a **watchdog** with a 10 s session timeout | Default librdkafka behaviour | Consumers could sit in a group join forever after a broker restart; now they restart in about a minute | [ADR-0015](docs/adr/0015-consumer-watchdog-and-session-timeout.md), F1, F2, F5 |
+| **Clean Architecture** only in scorer and explainer | Everywhere; nowhere | The other services are consume-transform-write loops where layers add files, not clarity | [ADR-0002](docs/adr/0002-code-organization-clean-architecture.md) |
+| **Open-loop** load, latency from the scheduled time | Closed-loop; Prometheus-only latency | A closed loop hides queueing (coordinated omission) | [How we measure](#how-we-measure) |
+| **MLflow** registry; **Postgres** audit store | Weights & Biases; custom S3 registry; ClickHouse/DuckDB | Local, $0, aliases give a one-move promotion; the audit store is a join between decisions, shadow scores and labels | PLAN (MLflow, audit store sections) |
+
+Decisions the measurements **contradicted** are kept in the open: the plan's 80 ms at thousands of events per second
+(real: 200 ev/s, bottleneck the Flink TaskManager), the hypothesis F1 (Flink restart 39 s, not 30 s) and the first
+F5 run (see Resilience).
+
 ### 6. The Journey of a Payment
+1. The **generator** schedules a payment at a fixed instant and publishes it to `payments`, keyed by `user_id` (labels go to `labels`, never in the payment).
+2. **Flink** keeps the user's last 10 minutes and emits one row to `payments-enriched` with the count, sum, maximum and tiny-payment count *including this payment*.
+3. The **scorer** reads a micro-batch, fetches the users' 30-day profile from **Redis** in one round trip (with a deadline and a circuit breaker), builds the feature vector with the same code training used, and scores it with **ONNX Runtime**.
+4. The registered model's own **thresholds** turn the score into a decision, and the decision, with the model version and whether it was `degraded`, goes to `decisions`.
+5. In parallel, and without being able to slow step 3: the **shadow scorer** scores the same event with the challenger; the **auditor** joins decisions, shadow scores and labels in Postgres; the **explainer** turns the top SHAP facts into a sentence; the **feature writer** keeps the state the synchronous path needs.
+6. A checkout that cannot wait for Kafka calls **gRPC `Score`** (or REST `POST /score`): the same use case, with velocity rebuilt from the stored state.
+7. The **latency collector** subtracts the scheduled time from the decision's broker timestamp: that is the number in Part IV.
 
 ## Part II — Components (Concept → How it works here → Technical details)
+Every component is its own container or package; the detail of each lives in the section named in the last column.
+
+| Component | What it does | Technology | Where it is explained |
+|---|---|---|---|
+| `generator` | Open-loop synthetic payments with fraud scenarios, labels to their own topic | Python, confluent-kafka | [The data](#the-data-honestly) |
+| Flink job (`flink/sql`) | Per-user velocity features, one row per payment | Flink SQL, `OVER` windows | [Features](#features-computed-twice-checked-against-each-other), E3 |
+| Profile builder | 30-day profile per user into Redis | Polars, Redis | [Features](#features-computed-twice-checked-against-each-other) |
+| `scorer` | Micro-batch scoring, thresholds, degraded mode, hot swap; also gRPC and REST entrypoints | ONNX Runtime, Clean Architecture | [From score to decision](#from-score-to-decision), E2, E4, E11 |
+| Shadow scorer | Same binary, challenger model, own consumer group | `--mode shadow` | [Shadow challenger](#shadow-challenger-promotion-and-the-drift-demo), E8 |
+| `auditor` | Joins decisions, shadow scores and labels | Postgres | [Shadow challenger](#shadow-challenger-promotion-and-the-drift-demo) |
+| `explainer` | SHAP facts phrased by an LLM, gated | SHAP, mock/Ollama | [Explanations](#explanations-xgboost-decides-the-llm-words-it) |
+| Training and registry | Rules / XGBoost / LightGBM, ONNX parity gate, thresholds at a cost, `champion` alias | XGBoost, MLflow | [The model](#rules-vs-models-test-days-never-seen-in-training), [Model lifecycle](#model-lifecycle-so-far) |
+| Data lake and backtests | Versioned history, backtests, drift reports | SeaweedFS (S3), Evidently | [Backtesting](#backtesting-on-a-versioned-data-lake) |
+| Observability | Metrics, dashboards, alerts, optional traces | Prometheus, Grafana, OTel/Tempo | [Observability](#observability), E9 |
+| `bench` and `chaos` | Open-loop experiments E1-E11 and fault experiments F0-F10 | Python, Toxiproxy | [How we measure](#how-we-measure), [Resilience](#resilience-what-happens-when-things-break-f0-f10) |
+
 ## Part III — The Model (features & parity, cost-based thresholds, offline evaluation, lifecycle, drift demo)
 
 ### The data, honestly
@@ -282,16 +356,22 @@ knee chart are in `docs/results/e1-*`.
 
 | rate (ev/s) | reps | p50 (ms) | p95 (ms) | p95 range | p99 (ms) | sustained | failing |
 |---|---|---|---|---|---|---|---|
-| 100 | 3 | 14.4 | 22.9 | 21.4-23.4 | 52.9 | yes | - |
-| 200 | 3 | 16.5 | 38.6 | 37.8-41.1 | 83.6 | yes (highest) | - |
-| 300 | 3 | 20.1 | 81 | 62.8-96.3 | 343 | no | p95_within_budget |
-| 400 | 3 | 36.1 | 3,750 | 105-20,267 | 7,967 | no | p95_within_budget |
-| 500 | 3 | 75.6 | 17,007 | 276-47,677 | 24,429 | no | gen_lag_valid, p95_within_budget |
-| 600 | 3 | 577 | 52,560 | 22,282-60,031 | 59,245 | no | p95_within_budget |
+| 100 | 3 | 13.9 | 22.9 | 20.4-476 | 200 | no | gen_lag_valid, p95_within_budget |
+| 200 | 3 | 15.6 | 38.6 | 34.6-45.4 | 231 | yes | - |
+| 300 | 3 | 19.3 | 64.4 | 53.5-413 | 135 | yes (highest) | - |
+| 400 | 3 | 25.1 | 326 | 122-1,409 | 704 | no | p95_within_budget |
+| 500 | 3 | 63.2 | 35,848 | 578-49,644 | 42,533 | no | gen_lag_valid, p95_within_budget |
+| 600 | 3 | 25,641 | 60,031 | 9,388-60,031 | 60,031 | no | gen_lag_valid, p95_within_budget |
 
-**Sustained throughput: 200 ev/s at p95 38.6 ms** (all three repetitions between 37.8 and 41.1 ms). At 300 ev/s the
-median p95 is 81 ms, just over the 80 ms budget, and from 400 ev/s the queues grow without bound. The container CPU
-at 300-400 ev/s shows where: the Flink TaskManager sits at 100-131% of a core while the scorer stays near 30% and Redis
+This is the E1 of the final measurement block (quiet machine, after the last fixes). An earlier full run of the same
+protocol (kept in `docs/results/e1-report-first-run.md`) gave: 100 ev/s p95 22.9 ms, **200 ev/s p95 38.6 ms (37.8-41.1)**, 300 ev/s p95 81 ms (62.8-96.3, not sustained),
+400 ev/s p95 3,750 ms, 500 ev/s 17,007 ms and 600 ev/s 52,560 ms.
+
+**Sustained throughput: 200 ev/s at p95 38.6 ms in both runs.** 300 ev/s is borderline: the median p95 was 64 ms in the
+final run (one repetition at 413 ms) and 81 ms in the earlier one, so it passed the 80 ms rule once and missed it once.
+The 100 ev/s step of the final run failed the generator-validity rule (a load-generator hiccup, p95 range 20-476 ms), not
+the pipeline. From 400 ev/s the queues grow without bound in both runs. In the earlier run the container CPU at 300-400
+ev/s showed where (not re-checked in the final run): the Flink TaskManager sits at 100-131% of a core while the scorer stays near 30% and Redis
 under 3%, so **the bottleneck is the Flink job (one TaskManager on this laptop), not the scorer or the feature store**.
 The M1 smoke (500 ev/s, p95 96 ms, placeholder scorer) is an earlier measurement; 500 ev/s does not fit the budget in this run (p95 17 s, generator lag invalid).
 The `[X]k events/s` of the headline is therefore not reachable on this hardware, and this section is the real number.
@@ -400,15 +480,16 @@ Same machine, same rule: one generator, only the pipeline running, 200 ev/s for 
 Single-run cells are marked; a run is `valid` only if the generator kept its schedule.
 
 **E2 - micro-batch size x wait** (`fraud_bench.run e2`). One run per cell, so differences of a few ms are noise
-(E1 shows p95 moving by that much between identical runs). The large-batch settings are the best of the four
-here (p95 33 and 44 ms against 74-81 ms for batches of 1 and 50).
+(E1 shows p95 moving by that much between identical runs). In the final block the 50- and 500-message batches with a
+5 ms wait are best (p95 29 ms), against 49 ms for a batch of 1 and for 500 messages with a 20 ms wait; an earlier
+run (`docs/results/e2-batching-first-run.md`) ranked the cells differently (p95 33-81 ms), which is the single-repetition noise.
 
 | max messages | max wait (ms) | p50 | p95 | p99 | lag stable |
 |---|---|---|---|---|---|
-| 1 | 1 | 10.863 | 73.919 | 154.879 | True |
-| 50 | 5 | 15.639 | 80.639 | 351.743 | True |
-| 500 | 5 | 15.927 | 32.927 | 71.935 | True |
-| 500 | 20 | 25.919 | 43.935 | 83.967 | True |
+| 1 | 1 | 10.311 | 49.311 | 164.351 | True |
+| 50 | 5 | 15.167 | 29.167 | 77.183 | True |
+| 500 | 5 | 15.487 | 29.487 | 73.535 | True |
+| 500 | 20 | 25.951 | 48.959 | 84.991 | True |
 
 **E8 - does the shadow challenger touch the champion?** (`scripts/e8_shadow.py`; ADR-6). The shadow is a separate
 consumer group that only writes to `shadow-scores`, so the expectation was "no effect". On this 8 GB laptop it is
@@ -426,7 +507,7 @@ for the same CPU; the isolation is logical (own group, own topic), not physical.
 | off | 3 | 22.911 | 115.967 | 182.911 | 0 | True |
 | on | 3 | 23.263 | 265.471 | 970.751 | 0 | False |
 
-**E9 - cost of observing** (`scripts/e9_tracing.py`). Tracing off, 1% and 100% of payments carrying a `traceparent`
+**E9 - cost of observing** (`scripts/e9_tracing.py`). The rerun in the final measurement block was discarded: all nine runs were invalid (p95 0.8-4 s even with tracing off; the cause was not investigated), so the table below is the earlier measurement. Tracing off, 1% and 100% of payments carrying a `traceparent`
 and exporting spans. The host had a bad stretch during this experiment (several runs invalid, one "off" run with a
 3.6 s p95), so the tails are not usable. The p50 of the clean repetitions (2 and 3) is stable: about 20 ms off,
 19-20 ms at 1% and 24 ms at 100%. Sampling 1% is free at this resolution; tracing everything costs about 4 ms of p50.
@@ -445,28 +526,29 @@ and exporting spans. The host had a bad stretch during this experiment (several 
 
 **E11 - REST/JSON vs gRPC** (`python -m fraud_bench.e11`). Same model, same use case behind both
 entrypoints, one client process at 100 req/s (the rate a single Python client holds without falling behind its own
-schedule), 3 repetitions. gRPC unary is about a third faster at the median and at the p99.
+schedule), 3 repetitions. gRPC unary is about a third faster at the median and at the p99 (3.5 vs 5.4 ms p50; the earlier run gave 4.1 vs 6.3 ms).
 
 | mode | p50 | p95 | p99 |
 |---|---|---|---|
-| rest | 6.28 | 9.68 | 15.38 |
-| grpc | 4.15 | 6.27 | 10.16 |
-| grpc-stream | 9.23 | 12.79 | 19.28 |
+| rest | 5.35 | 8.30 | 12.27 |
+| grpc | 3.54 | 5.39 | 8.59 |
+| grpc-stream | 8.30 | 10.00 | 12.19 |
 
-Per run (the bidirectional stream is slower than unary: one stream is one handler, so responses queue in order;
-the first two client designs were invalid, see `docs/results/e11-grpc-vs-rest.md`):
+Median of the valid repetitions of the final measurement block (quiet machine). Per run (the bidirectional stream
+is slower than unary: one stream is one handler, so responses queue in order; the first REST run is invalid: the
+client stalled right after the container started, start lag 1.7 s):
 
 | mode | rep | p50 | p95 | p99 | start lag p99 | valid | failed requests |
 |---|---|---|---|---|---|---|---|
-| rest | 1 | 6.32 | 9.68 | 13.35 | 1.59 | True | 0 |
-| grpc | 1 | 4.16 | 6.27 | 10.16 | 1.30 | True | 0 |
-| rest | 2 | 6.28 | 9.61 | 16.31 | 1.96 | True | 0 |
-| grpc | 2 | 4.15 | 6.59 | 10.75 | 1.35 | True | 0 |
-| rest | 3 | 6.23 | 9.88 | 15.38 | 1.86 | True | 0 |
-| grpc | 3 | 4.09 | 6.06 | 8.66 | 1.26 | True | 0 |
-| grpc-stream | 1 | 9.20 | 14.39 | 23.28 | 2.26 | True | 0 |
-| grpc-stream | 2 | 9.29 | 12.79 | 19.28 | 2.05 | True | 0 |
-| grpc-stream | 3 | 9.23 | 11.38 | 14.83 | 1.80 | True | 0 |
+| rest | 1 | 39549 | 90139 | 103267 | 1677 | False | 1 |
+| grpc | 1 | 4.97 | 14.50 | 38.36 | 3.66 | True | 0 |
+| grpc-stream | 1 | 8.33 | 10.00 | 12.19 | 1.34 | True | 0 |
+| rest | 2 | 5.30 | 8.56 | 12.78 | 1.33 | True | 0 |
+| grpc | 2 | 3.49 | 5.39 | 8.59 | 1.26 | True | 0 |
+| grpc-stream | 2 | 8.30 | 10.20 | 15.64 | 1.39 | True | 0 |
+| rest | 3 | 5.40 | 8.03 | 11.76 | 1.41 | True | 0 |
+| grpc | 3 | 3.54 | 5.18 | 6.88 | 1.26 | True | 0 |
+| grpc-stream | 3 | 8.27 | 9.82 | 11.75 | 1.26 | True | 0 |
 
 ### Resilience: what happens when things break (F0-F10)
 
@@ -559,7 +641,7 @@ The 80 ms target is not met yet. Finding where the time goes is the job of M4.
 ### CV phrase (measured numbers only)
 * **Real-time fraud scoring pipeline** (Kafka -> Flink SQL windowed features -> Redis online store -> XGBoost on ONNX Runtime) that sustains **200 events/s at p95 38.6 ms end to end** on a single 8 GB laptop, measured open loop with three repetitions per step; the bottleneck was identified as the Flink TaskManager (100-131% of a core at 300-400 ev/s while the scorer stayed near 30%).
 * **Model serving and lifecycle:** XGBoost on ONNX Runtime is 22x faster than the native booster per call at batch 1 (0.021 vs 0.468 ms; parity 1.2e-7 against Triton); it beats a rules baseline at **0.674 vs 0.260 recall at 1% FPR** (PR-AUC 0.590 vs 0.164); the champion hot-swaps through the MLflow registry, and a challenger in shadow mode costs 0.5-4 ms of champion p50 on this hardware.
-* **Contract-first gRPC scoring API** benchmarked against REST/JSON on the same model: **p99 8.7-10.8 ms vs 15.4 ms**, p50 4.1 vs 6.3 ms at 100 req/s.
+* **Contract-first gRPC scoring API** benchmarked against REST/JSON on the same model: **p99 8.6 ms vs 12.3 ms**, p50 3.5 vs 5.4 ms at 100 req/s (final measurement block, valid repetitions).
 * **Reliability:** 11 failure experiments (plus a control) with written hypotheses and 0 lost events in all of them; exactly-once recovery from a killed Flink TaskManager in 26 s with 0 duplicates (1539 with at-least-once), at a latency cost measured in E5; two hypotheses refuted and published with their real numbers.
 
 

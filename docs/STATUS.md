@@ -16,10 +16,10 @@ pushed. Design source of truth: `PLAN.md` (findings in section 16, H1-H35); resu
 * Final measurements on a quiet machine: E3, E1, E2, E9, E8, E11.
 
 ## Measured headline
-* **200 ev/s sustained at p95 38.6 ms** (E1, 3 reps); 300 ev/s p95 81 ms; 400+ not sustained. Bottleneck: Flink
+* **200 ev/s sustained at p95 38.6 ms** (E1, 3 reps, both full runs); 300 ev/s borderline (p95 64 ms in the final run, 81 ms in an earlier one); 400+ not sustained. Bottleneck: Flink
   TaskManager CPU (100-131% of a core while the scorer stays near 30%).
 * ONNX 0.021 ms vs native 0.468 ms per call at batch 1; Triton about 0.7-0.9 ms per call.
-* gRPC unary p50 4.1 / p99 8.7-10.8 ms vs REST p50 6.3 / p99 15.4 ms at 100 req/s.
+* gRPC unary p50 3.5 / p99 8.6 ms vs REST p50 5.4 / p99 12.3 ms at 100 req/s (final block); E9 rerun discarded (all invalid), earlier E9 kept.
 * Exactly-once: 0 duplicates after killing the TaskManager (1539 at-least-once); p95 25 ms -> 1.1 s (checkpoint 1 s).
 
 ## Open (nothing here blocks the rest)
